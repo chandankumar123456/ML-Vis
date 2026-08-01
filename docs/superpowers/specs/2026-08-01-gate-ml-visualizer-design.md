@@ -320,7 +320,7 @@ Topics reference datasets by id. Lazy loading + caching. Custom CSV upload → a
 - **Wave 1 — Regression cluster** (4): multiple-linear-regression, polynomial-regression, ridge-regression, lasso-regression
 - **Wave 2 — Classification cluster** (5): logistic-regression, cross-entropy-loss, mle, softmax-regression, knn
 - **Wave 3 — Geometry cluster** (4): svm-hard-margin, svm-soft-margin, perceptron, lda
-- **Wave 4 — Dim-reduction cluster** (3): pca, pca-svd, naive-bayes (moved for resource reuse)
+- **Wave 4 — Dim-reduction cluster** (3): pca, pca-svd, naive-bayes (moved here so it shares the `distribution-view` component built in this wave with LDA)
 - **Wave 5 — Trees & clustering** (4): decision-trees, decision-trees-regression, kmeans, hierarchical-clustering
 - **Wave 6 — Deep learning cluster** (3): neural-networks, backpropagation, optimization-foundations
 - **Wave 7 — Evaluation & meta** (6): cross-validation, classification-metrics, roc-auc, bias-variance, overfitting-underfitting, introduction
