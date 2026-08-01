@@ -1105,7 +1105,10 @@ describe('topicRegistry', () => {
       ...fakeTopic, version: 2,
       migrations: { 1: (b: SessionBundle) => ({ ...b, params: { migrated: true } }) },
     } as TopicModule;
-    const old: SessionBundle = { topicId: 'fake', moduleVersion: 1, params: {}, step: 0, activeView: 'x', bookmarks: [], savedAt: 't' };
+    // NOTE: moduleVersion 0 = legacy pre-versioning bundle; migration keys mean
+    // "migrate TO this version" (guard: b.moduleVersion < key), so a bundle
+    // already at version 1 must NOT be re-migrated by key 1.
+    const old: SessionBundle = { topicId: 'fake', moduleVersion: 0, params: {}, step: 0, activeView: 'x', bookmarks: [], savedAt: 't' };
     const migrated = migrateBundle(topic, old);
     expect(migrated.moduleVersion).toBe(2);
     expect(migrated.params.migrated).toBe(true);
