@@ -30,7 +30,8 @@ export const usePlaybackStore = create<PlaybackState>((set, get) => ({
   computeAndSet: (sim, params) => {
     const run = computeRun(sim, params);
     const playback = createPlayback(run);
-    set({ run, playback, cursor: 0, playing: false });
+    // mirror playback.cursor so empty-run sentinel (-1) propagates immediately
+    set({ run, playback, cursor: playback.cursor, playing: false });
   },
 
   setCursor: (i) => {
@@ -40,7 +41,13 @@ export const usePlaybackStore = create<PlaybackState>((set, get) => ({
     set({ cursor: playback.cursor });
   },
 
-  play: () => { get().playback?.play(); set({ playing: true }); },
+  play: () => {
+    const pb = get().playback;
+    if (!pb) return;
+    pb.play();
+    // mirror engine: play() is a no-op on empty runs — never claim playing
+    set({ playing: pb.playing });
+  },
   pause: () => { get().playback?.pause(); set({ playing: false }); },
   stepForward: () => {
     const { playback } = get();
@@ -58,11 +65,14 @@ export const usePlaybackStore = create<PlaybackState>((set, get) => ({
     const { playback } = get();
     if (!playback) return;
     playback.reset();
-    set({ cursor: 0, playing: false });
+    set({ cursor: playback.cursor, playing: false });
   },
   setSpeed: (s) => {
-    get().playback?.setSpeed(s);
-    set({ speed: s });
+    const pb = get().playback;
+    if (!pb) return;
+    pb.setSpeed(s);
+    // mirror engine: setSpeed rejects non-finite and clamps to [0.1, 8]
+    set({ speed: pb.speed });
   },
   tick: () => {
     const { playback, playing } = get();

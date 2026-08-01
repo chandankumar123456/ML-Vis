@@ -46,6 +46,6 @@ export const useProgressStore = create<ProgressState>()(
       setLastVisited: (lastVisited) => set({ lastVisited }),
       reset: () => set({ completed: {}, bookmarks: [], lastVisited: undefined }),
     }),
-    { name: 'mlv-progress' }
+    { name: 'mlv-progress', version: 1 }
   )
 );

@@ -29,6 +29,6 @@ export const useSettingsStore = create<SettingsState>()(
       setShowTelemetry: (showTelemetry) => set({ showTelemetry }),
       reset: () => set({ theme: 'light', palette: 'default', reducedMotion: false, showTelemetry: false }),
     }),
-    { name: 'mlv-settings' }
+    { name: 'mlv-settings', version: 1 }
   )
 );

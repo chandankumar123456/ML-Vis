@@ -24,6 +24,6 @@ export const useSessionStore = create<SessionState>()(
       resumeSession: (savedAt) => get().sessions.find((x) => x.savedAt === savedAt),
       reset: () => set({ sessions: [] }),
     }),
-    { name: 'mlv-sessions' }
+    { name: 'mlv-sessions', version: 1 }
   )
 );

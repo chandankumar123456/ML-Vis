@@ -48,6 +48,6 @@ export const useAnalyticsStore = create<AnalyticsState>()(
       },
       reset: () => set({ questionsAttempted: {}, timePerTopic: {}, topicVisits: {} }),
     }),
-    { name: 'mlv-analytics' }
+    { name: 'mlv-analytics', version: 1 }
   )
 );

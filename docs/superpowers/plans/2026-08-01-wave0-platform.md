@@ -1345,7 +1345,7 @@ export const useSettingsStore = create<SettingsState>()(
       setShowTelemetry: (showTelemetry) => set({ showTelemetry }),
       reset: () => set({ theme: 'light', palette: 'default', reducedMotion: false, showTelemetry: false }),
     }),
-    { name: 'mlv-settings' }
+    { name: 'mlv-settings', version: 1 }
   )
 );
 ```
@@ -1384,7 +1384,8 @@ export const usePlaybackStore = create<PlaybackState>((set, get) => ({
   computeAndSet: (sim, params) => {
     const run = computeRun(sim, params);
     const playback = createPlayback(run);
-    set({ run, playback, cursor: 0, playing: false });
+    // mirror playback.cursor so empty-run sentinel (-1) propagates immediately
+    set({ run, playback, cursor: playback.cursor, playing: false });
   },
 
   setCursor: (i) => {
@@ -1394,7 +1395,13 @@ export const usePlaybackStore = create<PlaybackState>((set, get) => ({
     set({ cursor: playback.cursor });
   },
 
-  play: () => { get().playback?.play(); set({ playing: true }); },
+  play: () => {
+    const pb = get().playback;
+    if (!pb) return;
+    pb.play();
+    // mirror engine: play() is a no-op on empty runs — never claim playing
+    set({ playing: pb.playing });
+  },
   pause: () => { get().playback?.pause(); set({ playing: false }); },
   stepForward: () => {
     const { playback } = get();
@@ -1412,11 +1419,14 @@ export const usePlaybackStore = create<PlaybackState>((set, get) => ({
     const { playback } = get();
     if (!playback) return;
     playback.reset();
-    set({ cursor: 0, playing: false });
+    set({ cursor: playback.cursor, playing: false });
   },
   setSpeed: (s) => {
-    get().playback?.setSpeed(s);
-    set({ speed: s });
+    const pb = get().playback;
+    if (!pb) return;
+    pb.setSpeed(s);
+    // mirror engine: setSpeed rejects non-finite and clamps to [0.1, 8]
+    set({ speed: pb.speed });
   },
   tick: () => {
     const { playback, playing } = get();
@@ -1480,7 +1490,7 @@ export const useProgressStore = create<ProgressState>()(
       setLastVisited: (lastVisited) => set({ lastVisited }),
       reset: () => set({ completed: {}, bookmarks: [], lastVisited: undefined }),
     }),
-    { name: 'mlv-progress' }
+    { name: 'mlv-progress', version: 1 }
   )
 );
 ```
@@ -1537,7 +1547,7 @@ export const useAnalyticsStore = create<AnalyticsState>()(
       },
       reset: () => set({ questionsAttempted: {}, timePerTopic: {}, topicVisits: {} }),
     }),
-    { name: 'mlv-analytics' }
+    { name: 'mlv-analytics', version: 1 }
   )
 );
 ```
@@ -1570,15 +1580,15 @@ export const useSessionStore = create<SessionState>()(
       resumeSession: (savedAt) => get().sessions.find((x) => x.savedAt === savedAt),
       reset: () => set({ sessions: [] }),
     }),
-    { name: 'mlv-sessions' }
+    { name: 'mlv-sessions', version: 1 }
   )
 );
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [ ] **Step 4: Run tests to verify they pass**
 
-Run: `npx vitest run src/store/stores.test.ts`
-Expected: PASS (4 describe blocks)
+Run: `npx vitest run src/store`
+Expected: PASS — `stores.test.ts` (4 describe blocks) + `playbackStore.test.ts` (6 tests: engine-mirroring semantics — empty-run play no-op, sentinel cursor -1 propagation, tick auto-stop flipping playing, setSpeed clamping/rejection mirror, reset/step mirroring)
 
 - [ ] **Step 5: Commit**
 
