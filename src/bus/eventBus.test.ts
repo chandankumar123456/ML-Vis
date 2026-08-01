@@ -13,6 +13,14 @@ describe('eventBus', () => {
   });
   it('does not crash with zero subscribers', () => {
     eventBus.emit({ type: 'highlight', payload: { panel: 'x', id: 'y', intensity: 0.5 } });
-    expect(true).toBe(true);
+  });
+  it('isolates throwing subscribers', () => {
+    const ok = vi.fn();
+    eventBus.subscribe(() => { throw new Error('boom'); });
+    eventBus.subscribe(ok);
+    expect(() => {
+      eventBus.emit({ type: 'clear-highlights' });
+    }).not.toThrow();
+    expect(ok).toHaveBeenCalledTimes(1);
   });
 });

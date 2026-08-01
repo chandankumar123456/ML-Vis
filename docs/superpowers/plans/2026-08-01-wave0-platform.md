@@ -995,7 +995,15 @@ describe('eventBus', () => {
   });
   it('does not crash with zero subscribers', () => {
     eventBus.emit({ type: 'highlight', payload: { panel: 'x', id: 'y', intensity: 0.5 } });
-    expect(true).toBe(true);
+  });
+  it('isolates throwing subscribers', () => {
+    const ok = vi.fn();
+    eventBus.subscribe(() => { throw new Error('boom'); });
+    eventBus.subscribe(ok);
+    expect(() => {
+      eventBus.emit({ type: 'clear-highlights' });
+    }).not.toThrow();
+    expect(ok).toHaveBeenCalledTimes(1);
   });
 });
 ```
@@ -1028,8 +1036,14 @@ class EventBus {
   }
 
   emit(e: BusEvent): void {
+    // NOTE: Set iteration is insertion-ordered; a handler unsubscribing another
+    // not-yet-visited handler skips it, and handlers subscribing mid-emit run once.
     for (const h of this.handlers) {
-      try { h(e); } catch { /* subscriber errors never break the bus */ }
+      try { h(e); } catch (err) {
+        // isolation guarantee: subscriber errors never break the bus,
+        // but they must not be silent ghosts either
+        console.error('[eventBus] handler failed for event', e.type, err);
+      }
     }
   }
 }
@@ -1075,7 +1089,7 @@ const fakeTopic = {
     revision: { quick: '5m', standard: '15m', deep: '30m', mastery: '60m' },
   },
   layers: { foundation: [], core: [], advanced: [] },
-  views: [], params: [], simulation: null as any, formulas: [], derivations: [],
+  params: [], simulation: null as any, formulas: [], derivations: [],
   questions: [], comparisons: [], failureDemos: [], mistakes: [], testCases: [],
 } as TopicModule;
 

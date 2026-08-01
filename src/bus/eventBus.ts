@@ -18,8 +18,14 @@ class EventBus {
   }
 
   emit(e: BusEvent): void {
+    // NOTE: Set iteration is insertion-ordered; a handler unsubscribing another
+    // not-yet-visited handler skips it, and handlers subscribing mid-emit run once.
     for (const h of this.handlers) {
-      try { h(e); } catch { /* subscriber errors never break the bus */ }
+      try { h(e); } catch (err) {
+        // isolation guarantee: subscriber errors never break the bus,
+        // but they must not be silent ghosts either
+        console.error('[eventBus] handler failed for event', e.type, err);
+      }
     }
   }
 }
