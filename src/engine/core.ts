@@ -50,7 +50,7 @@ export function computeRun(
       snapshots.push(next);
       state = next;
     }
-    if (snapshots.length >= maxSteps) {
+    if (failedAtStep === undefined && snapshots.length >= maxSteps) {
       failedAtStep = maxSteps;
       failureReason = 'step budget exceeded (no convergence)';
     }
@@ -59,9 +59,14 @@ export function computeRun(
     failureReason = e instanceof Error ? e.message : String(e);
   }
 
-  const estBytes = snapshots.reduce(
-    (acc, s) => acc + JSON.stringify(s).length, 0
-  );
+  // estBytes must NOT escape the sandbox: a cyclic VisualCommand (index signature
+  // allows arbitrary payloads) would otherwise throw out of computeRun itself.
+  let estBytes = 0;
+  try {
+    estBytes = snapshots.reduce((acc, s) => acc + JSON.stringify(s).length, 0);
+  } catch {
+    estBytes = 0;
+  }
 
   const telemetry: RunTelemetry = {
     snapshotCount: snapshots.length,
