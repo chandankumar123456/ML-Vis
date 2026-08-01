@@ -475,9 +475,30 @@ Comparisons: vs eigen-decomposition (symmetric vs general), vs PCA (same math), 
 
 Failures: NaN for missing data (SVD needs complete matrices — note alternatives); numerical sign flips.
 
-### Task 18: (naive-bayes was moved to Wave 2 Task 10 — this slot reserved for distribution-view polish + mle module if needed)
+### Task 18: mle (Maximum Likelihood Estimation — REQUIRED topic; spec §5 topic #12)
 
-**Decision:** MLE content lives inside `cross-entropy-loss` (Task 7). If extra depth desired, create `src/topics/mle/` in this wave following the same pattern (likelihood curves, log-likelihood, MLE properties, invariance). Only if time permits — the CE module already covers MLE thoroughly. Mark as optional.
+**Files:** `src/topics/mle/{...}.ts`
+
+TestCases:
+1. `MLE recovers true Bernoulli parameter` — MLE of p on clean Bernoulli samples ≈ empirical frequency.
+2. `MLE recovers Gaussian mean/variance` — MLE μ ≈ sample mean, σ² ≈ biased (÷n) sample variance, not ÷(n−1).
+3. `log-likelihood maximization` — likelihood < log-likelihood monotonicity: argmax identical, verify via numeric gradient.
+4. `MLE = OLS for Gaussian noise` — linear model with Gaussian noise: MLE solution equals normal equation (numeric).
+5. `MLE consistency demo` — estimate improves with sample count n (10 → 100 → 1000, noise seeded).
+
+Math content: likelihood L(θ), log-likelihood ℓ(θ), score function = derivative, MLE invariance property, asymptotic normality (mention), connection: CE loss = negative log-likelihood, OLS = MLE under Gaussian noise. Derivation: MLE for Bernoulli (coin flip), Gaussian (μ, σ²), linear regression (via score = 0).
+
+Simulation: dataset family select (coin flips, Gaussian samples, linear regression), `n` slider (seeded), distribution curve animated as n grows, MLE estimate marker vs true parameter, log-likelihood surface over (μ, σ²) as 2D contour + gradient arrows (self-contained via CanvasStage path — do NOT depend on loss-landscape, which lands in Task 27/Wave 6; swap to 3D surface later when available), bias demo (σ² ÷n vs ÷(n−1) gap shrinks with n).
+
+Questions: NAT (derive MLE of λ for exponential), conceptual (why log-likelihood), trap (biased variance in MLE), visual (likelihood vs log-likelihood), matrix (score = Xᵀ(y−Xθ) for regression), indirect (MLE of Bernoulli from counts).
+
+Mistakes: confusing likelihood with probability; forgetting MLE variance is biased (÷n); maximizing likelihood instead of log (underflow); plugging sample variance into Gaussian MLE without bias discussion.
+
+Comparisons: vs MAP (prior term), vs CE (same math different lens), vs OLS (MLE instance).
+
+Failures: underflow with many samples (use log), non-identifiable parameters (flat likelihood), non-convex likelihood (local maxima).
+
+Commit: `feat: mle topic module with likelihood surface simulation`
 
 ---
 
@@ -645,8 +666,9 @@ Failures: vanishing (deep sigmoid), exploding (large init), dead ReLU, NaN loss.
 
 ### Task 27: optimization-foundations (GD variants — GD/SGD/Mini-batch/Momentum/Adam view)
 
-**Files:** `src/topics/optimization-foundations/{...}.ts`, `src/visualizers/OptimizerView.tsx` (registry component)
+**Files:** `src/topics/optimization-foundations/{...}.ts`, `src/visualizers/OptimizerView.tsx` (registry component), `src/visualizers/LossLandscape.tsx` (registry component)
 
+- **LossLandscape (NEW registry component, required — spec §4):** 3D-perspective surface for 2-weight loss functions. Own small projection math (`src/lib/math/project3d.ts`: rotate → perspective divide → screen), renders wireframe/height-colored mesh via CanvasStage, optional 2D-contour fallback view toggle. Emits `{type:'surface'}` VisualCommands; consumes `highlight` events to draw a trail point at (θ₁, θ₂, loss). Register as `loss-landscape` in viewRegistry (Task 6 of Wave 0 pattern). TDD it before the topic (surface rotation keeps viewpoint stable; a known bowl maps to expected projected center; contour fallback equals analytic level set).
 - OptimizerView: 2D loss surface (bowl + optional saddle), trails of multiple optimizers simultaneously (GD, SGD, mini-batch, momentum, Adam), step-by-step animation, per-optimizer loss curves, parameter traces. Reusable for gradient-descent topic too (register as `optimizer-view`).
 
 TestCases:
@@ -657,7 +679,7 @@ TestCases:
 
 Math content: batch/mini-batch/SGD tradeoffs, learning rate schedules, momentum (velocity), Nesterov (mention), AdaGrad/RMSProp (mention), Adam (moments, bias correction), convergence rates (convex: O(1/T) GD vs O(1/√T) SGD), stochastic gradient noise.
 
-Simulation: surface select (bowl, ill-conditioned ellipse, saddle), `optimizer` select (compare up to 3 simultaneously), `lr`, `batchSize`, `momentum`, `beta1/beta2`, `epochs`; trails animated (loss-landscape 3D-perspective or 2D contour — implement contour via CanvasStage path), loss curves per optimizer (curve-comparator).
+Simulation: surface select (bowl, ill-conditioned ellipse, saddle), `optimizer` select (compare up to 3 simultaneously), `lr`, `batchSize`, `momentum`, `beta1/beta2`, `epochs`; trails animated on `loss-landscape` (3D-perspective surface) with 2D-contour fallback toggle, loss curves per optimizer (curve-comparator).
 
 Questions: conceptual (why SGD generalizes better — flat minima), NAT (momentum update formula), trap (Adam hyperparameters), matrix (parameter vector updates).
 
@@ -816,7 +838,17 @@ A lighter-weight module (no heavy simulation — focus on concept taxonomy + int
 
 TestCases: none heavy; add unit test for conceptData integrity (every topic ref exists).
 
-### Task 36: Telemetry overlay + performance guard
+### Task 36: Resources layer — datasets, CSV upload, images (spec §9)
+
+**Files:** `src/resources/datasets/`, `src/resources/images/`, `src/resources/index.ts`, `src/resources/ResourcesPage.tsx` (route `/resources`), `src/lib/math/csv.ts`
+
+- Built-in datasets (synthetic, generated at runtime with seeded PRNG — no binaries): iris-like 3-class (only as *synthetic* stand-in, clearly labeled, do NOT claim real Fisher iris values), wine-like 3-class stand-in, gaussian-blobs 2-class (used by several topics), housing-like regression (n=50, features = area, bedrooms, age), XOR, spiral. Each: `{ id, name, description, n, d, classes?, generator(params) → { X: number[][], y: (number|string)[] } , license: 'synthetic' }`.
+- `src/resources/index.ts`: `getDataset(id)`, `listDatasets()`, `saveCustomDataset(id, {X, y})` (localStorage), `loadCustomDatasets()`.
+- CSV upload: `csv.ts` — parse CSV text (handles quoted fields, header row, mixed numeric/categorical columns) → dataset; store parsed result in localStorage via progressStore (`customDatasets` key); UI on ResourcesPage: upload button (file input → text → parse → preview table → save → appears in topic "dataset" selects for topics that support dataset selection: knn, decision-trees, kmeans, logistic-regression, naive-bayes, svm).
+- Images folder: keep empty placeholder with README note (no binary assets; everything procedural).
+- TestCases: `csv parse correctness` (quotes, commas in quotes, numeric coercion, header detection), `roundtrip save/load` (localStorage mock), `dataset shape contract` (every built-in returns consistent X/y shapes).
+
+### Task 37: Telemetry overlay + performance guard
 
 **Files:** `src/visualizers/TelemetryPanel.tsx`, update `ViewHost`.
 
@@ -824,7 +856,7 @@ TestCases: none heavy; add unit test for conceptData integrity (every topic ref 
 - Shown when `settings.showTelemetry`; warns when genMs > 500 (heavy topic suggestion: reduce maxSteps).
 - Also used by performance-engineer during Wave reviews.
 
-### Task 37: Recorder finalization (GIF/PNG sequence download)
+### Task 38: Recorder finalization (GIF/PNG sequence download)
 
 **Files:** update `src/lib/exporters/recorder.ts`, `src/visualizers/Recorder.tsx`.
 
@@ -832,14 +864,14 @@ TestCases: none heavy; add unit test for conceptData integrity (every topic ref 
 - Download button in Recorder view.
 - GIF: optional via `gif.js` (add dependency) — encode up to 60 frames at 12 fps; keep behind a "GIF (beta)" button.
 
-### Task 38: Analytics & revision dashboard
+### Task 39: Analytics & revision dashboard
 
 **Files:** `src/pages/DashboardPage.tsx`, route `/dashboard`, sidebar link.
 
 - Shows: topics completed, time per topic (bar), question accuracy per topic, weakest topics (from analyticsStore), most-revisited simulations, bookmarks list, session resume list.
 - Revision planner: given `metadata.revision` (5/15/30/60-min) and analytics gaps, suggests next study path (simple heuristic: weakest topic → shortest revision path).
 
-### Task 39: Final wave — full suite + QA + deployment config
+### Task 40: Final wave — full suite + QA + deployment config
 
 **Files:** `vercel.json` (or GitHub Pages config via `base` in vite.config), final QA.
 

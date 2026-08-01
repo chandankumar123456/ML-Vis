@@ -2170,20 +2170,6 @@ import { describe, it, expect } from 'vitest';
 import { fitBounds } from './CanvasStage';
 
 describe('fitBounds', () => {
-  it('returns identity-scale for in-bounds data', () => {
-    const t = fitBounds({ x: [0, 1], y: [0, 1] }, 100, 100);
-    expect(t.scale).toBeCloseTo(0.2, 5); // (100 - 80) / 1 = 20 → wait, pad 40 → (100-80)/1 = 20px per unit? see impl
-  });
-});
-```
-
-Note: the assertion above is intentionally loose — replace it with exact expectations after reading the implementation in Step 2. The real invariants: scale > 0, and `worldToScreen` maps bounds x[0] to pad, x[1] to width-pad. Write those:
-
-```ts
-import { describe, it, expect } from 'vitest';
-import { fitBounds } from './CanvasStage';
-
-describe('fitBounds', () => {
   it('scales so data fits within padded viewport', () => {
     const t = fitBounds({ x: [0, 10], y: [0, 10] }, 200, 100, 20);
     // available: w=160, h=60 → scale = min(16, 6) = 6
@@ -2447,13 +2433,17 @@ function boundsOf(cmds: VisualCommand[]): Bounds {
 import { useEffect, useRef, useState } from 'react';
 import { CanvasStage, type Bounds } from '../lib/canvas/CanvasStage';
 import type { SnapshotRun } from '../engine/types';
+import { usePlaybackStore } from '../store/usePlaybackStore';
 
-export function LossCurve({ run, cursor, metricKey = 'cost' }: {
-  run: SnapshotRun | null; cursor: number; metricKey?: string;
+// IMPORTANT: registered visualizers receive ViewProps ({ run, params, snapshot, subscribe }) from ViewHost.
+// Cursor-dependent components must read `cursor` from the playback store, NOT from props (ViewHost does not pass it).
+export function LossCurve({ run, metricKey = 'cost' }: {
+  run: SnapshotRun | null; metricKey?: string;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const stageRef = useRef<CanvasStage | null>(null);
   const [size, setSize] = useState({ w: 600, h: 300 });
+  const cursor = usePlaybackStore((s) => s.cursor);
 
   useEffect(() => {
     const ro = new ResizeObserver(([entry]) => {
@@ -3360,9 +3350,17 @@ export const gdTestCases: TestCase[] = [
     },
   },
   {
-    name: 'diverges at lr=0.3 on quadratic',
+    // |1−2η| = 0.4 < 1 → still converges; this documents the boundary behavior
+    name: 'converges (slowly) at lr=0.3 on quadratic',
     params: { f: 'quadratic', x0: 1, learningRate: 0.3 },
-    maxSteps: 200,
+    maxSteps: 500,
+    expect: { converged: true },
+  },
+  {
+    // |1−2η| = 1 → bounded oscillation, never converges → step budget exceeded
+    name: 'oscillates at lr=1.0 on quadratic (never converges)',
+    params: { f: 'quadratic', x0: 1, learningRate: 1.0 },
+    maxSteps: 100,
     expect: { converged: false },
   },
   {
@@ -3372,9 +3370,10 @@ export const gdTestCases: TestCase[] = [
     expect: { eventLabels: ['converged'] },
   },
   {
-    name: 'fails (non-finite) at lr=1.0',
-    params: { f: 'quadratic', x0: 2, learningRate: 1.0 },
-    maxSteps: 100,
+    // |1−2η| = 2 > 1 → |x| doubles each step: 2, 4, 8, ... → overflows double range at step ≈ 1023
+    name: 'fails (non-finite) at lr=1.5',
+    params: { f: 'quadratic', x0: 2, learningRate: 1.5 },
+    maxSteps: 1100,
     expect: { converged: false },
   },
 ];
@@ -3591,6 +3590,9 @@ export const simulation = {
   },
 
   step: (p: Params, s: SimState): SimState | null => {
+    // termination: converged flag set by the previous step → stop cleanly (null = run ends, failedAtStep stays undefined)
+    if ((s.algorithm as any).converged) return null;
+
     const x = s.algorithm.x as number;
     const lr = p.learningRate as number;
     const f = p.f as string;
@@ -3602,11 +3604,11 @@ export const simulation = {
     const xNext = x - lr * grad;
     const iteration = (s.algorithm.iteration as number) + 1;
 
-    // convergence check
+    // convergence check → emit the converged snapshot, and the NEXT call returns null
     if (Math.abs(grad) < 1e-4) {
       return {
         ...s,
-        algorithm: { ...s.algorithm, x, gradient: grad, iteration },
+        algorithm: { ...s.algorithm, x, gradient: grad, iteration, converged: true },
         narration: `Converged at x = ${x.toFixed(4)} — gradient is ≈ 0.`,
         events: [...s.events, { type: 'converged', label: 'converged', step: iteration }],
         timeline: [...s.timeline, 'Convergence'],
@@ -3702,7 +3704,7 @@ export const gdModule: TopicModule = {
     const issues: string[] = [];
     const lr = p.learningRate as number;
     if (lr <= 0) issues.push('Learning rate must be positive');
-    if (lr > 1) issues.push('Learning rate > 1 will diverge for this objective');
+    if (lr > 1) issues.push('Learning rate ≥ 1 will oscillate or diverge for this objective');
     return issues;
   },
 };
@@ -3845,8 +3847,9 @@ export const slrTestCases: TestCase[] = [
     maxSteps: 3,
     expect: {
       finalMetrics: {
-        slope: (v: number) => Math.abs(v - 2) < 0.05,
-        intercept: (v: number) => Math.abs(v - 1) < 0.05,
+        // NOTE: simulation metrics are { w, b, mse } — testCases must reference those exact keys
+        w: (v: number) => Math.abs(v - 2) < 0.05,
+        b: (v: number) => Math.abs(v - 1) < 0.05,
         mse: (v: number) => v < 0.01,
       },
     },
@@ -3857,8 +3860,8 @@ export const slrTestCases: TestCase[] = [
     maxSteps: 2000,
     expect: {
       finalMetrics: {
-        slope: (v: number) => Math.abs(v - 1.5) < 0.05,
-        intercept: (v: number) => Math.abs(v - (-0.5)) < 0.05,
+        w: (v: number) => Math.abs(v - 1.5) < 0.05,
+        b: (v: number) => Math.abs(v - (-0.5)) < 0.05,
       },
     },
   },
@@ -3867,7 +3870,7 @@ export const slrTestCases: TestCase[] = [
     params: { n: 20, slope: 2, intercept: 1, noise: 0.0, outlierX: 15, outlierY: -10, useNormalEquation: true },
     maxSteps: 3,
     expect: {
-      finalMetrics: { slope: (v: number) => v < 2.05 }, // pulled down by outlier
+      finalMetrics: { w: (v: number) => v < 2.05 }, // pulled down by outlier
     },
   },
 ];
@@ -4105,26 +4108,21 @@ export function fitNormalEquation(p: Params, data: SlrData): { w: number; b: num
   return { w, b };
 }
 
-export function fitGradientDescent(p: Params, data: SlrData, epochs: number): { w: number; b: number; history: { w: number; b: number; mse: number }[] } {
+// ONE epoch of full-batch gradient descent: O(n). Call per step; snapshots capture history naturally.
+export function gradientStep(p: Params, data: SlrData, w: number, b: number): { w: number; b: number; mse: number } {
   const { xs, ys } = data;
   const n = xs.length;
-  let w = 0, b = 0;
   const lr = p.learningRate as number;
-  const history: { w: number; b: number; mse: number }[] = [];
-  for (let e = 0; e < epochs; e++) {
-    let dw = 0, db = 0, mse = 0;
-    for (let i = 0; i < n; i++) {
-      const pred = w * xs[i] + b;
-      const err = pred - ys[i];
-      dw += 2 * err * xs[i];
-      db += 2 * err;
-      mse += err * err;
-    }
-    dw /= n; db /= n; mse /= n;
-    w -= lr * dw; b -= lr * db;
-    history.push({ w, b, mse });
+  let dw = 0, db = 0, mse = 0;
+  for (let i = 0; i < n; i++) {
+    const pred = w * xs[i] + b;
+    const err = pred - ys[i];
+    dw += 2 * err * xs[i];
+    db += 2 * err;
+    mse += err * err;
   }
-  return { w, b, history };
+  dw /= n; db /= n; mse /= n;
+  return { w: w - lr * dw, b: b - lr * db, mse };
 }
 
 function mseOf(w: number, b: number, data: SlrData): number {
@@ -4138,13 +4136,13 @@ export const simulation = {
     const useNormal = p.useNormalEquation as boolean;
     let fit;
     if (useNormal) {
-      fit = fitNormalEquation(p, data);
+      fit = { ...fitNormalEquation(p, data), epoch: 0 };
     } else {
-      fit = fitGradientDescent(p, data, 1);
+      fit = { ...gradientStep(p, data, 0, 0), epoch: 1 }; // one epoch from w=0, b=0
     }
     const mse = mseOf(fit.w, fit.b, data);
     return {
-      algorithm: { w: fit.w, b: fit.b, mode: useNormal ? 'normal-equation' : 'gradient-descent' },
+      algorithm: { w: fit.w, b: fit.b, mode: useNormal ? 'normal-equation' : 'gradient-descent', epoch: fit.epoch },
       visuals: [
         ...data.xs.map((x, i) => ({ type: 'point', id: `d${i}`, x, y: data.ys[i], color: '#64748b' })),
         { type: 'line', id: 'fit-line', points: [[-5, fit.w * -5 + fit.b], [5, fit.w * 5 + fit.b]], color: '#3b82f6' },
@@ -4172,9 +4170,10 @@ export const simulation = {
     if (s.algorithm.mode !== 'gradient-descent') return null;
     const data = generateData(p);
     const epochs = p.epochs as number ?? 2000;
-    const fit = fitGradientDescent(p, data, epochs);
     const currentEpoch = (s.algorithm.epoch as number ?? 1) + 1;
     if (currentEpoch > epochs) return null;
+    // incremental: one GD epoch from the running (w, b) — O(n) per snapshot, no recomputation
+    const fit = gradientStep(p, data, s.algorithm.w as number, s.algorithm.b as number);
     const mse = mseOf(fit.w, fit.b, data);
     return {
       algorithm: { ...s.algorithm, w: fit.w, b: fit.b, epoch: currentEpoch },
