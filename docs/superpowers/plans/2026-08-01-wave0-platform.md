@@ -1152,6 +1152,12 @@ export function listTopics(): TopicModule[] { return [...topics.values()]; }
 export function getTopicCount(): number { return topics.size; }
 
 export function migrateBundle(topic: TopicModule, bundle: SessionBundle): SessionBundle {
+  // A bundle NEWER than the module (rolled-back app / cached session) must not be
+  // stamped down — re-running old migrations on newer-shaped data would corrupt it.
+  if (bundle.moduleVersion > topic.version) {
+    console.warn(`[registry] bundle moduleVersion ${bundle.moduleVersion} is newer than topic ${topic.id}@${topic.version}; leaving bundle untouched`);
+    return bundle;
+  }
   let b = bundle;
   const migrations = topic.migrations ?? {};
   for (const v of Object.keys(migrations).map(Number).sort((a, b) => a - b)) {
@@ -1165,12 +1171,15 @@ export function migrateBundle(topic: TopicModule, bundle: SessionBundle): Sessio
 // src/registry/viewRegistry.ts
 import type { ComponentType } from 'react';
 import type { Params, SnapshotRun, SimState } from '../engine/types';
+import type { BusEvent } from '../bus/eventBus';
 
 export interface ViewProps {
   run?: SnapshotRun;
   snapshot?: SimState | null;
   params: Params;
-  subscribe?: (fn: (e: unknown) => void) => () => void;
+  // Bus-shaped subscription so consumers narrow on the BusEvent union
+  // (matches eventBus.subscribe; ViewHost wires it up)
+  subscribe?: (fn: (e: BusEvent) => void) => () => void;
   compact?: boolean;
 }
 
@@ -1191,23 +1200,36 @@ export function viewExists(id: string): boolean { return views.has(id); }
  */
 const topicLoaders = import.meta.glob('../topics/*/module.ts');
 
-export async function loadTopic(topicId: string): Promise<void> {
+async function registerModule(mod: Record<string, unknown>): Promise<void> {
+  if (typeof mod.register === 'function') (mod.register as () => void)();
+}
+
+export async function loadTopic(topicId: string): Promise<boolean> {
   const path = `../topics/${topicId}/module.ts`;
   const loader = topicLoaders[path];
-  if (!loader) return;
-  const mod = (await loader()) as Record<string, unknown>;
-  if (typeof mod.register === 'function') {
-    (mod.register as () => void)();
+  if (!loader) return false;
+  try {
+    await registerModule((await loader()) as Record<string, unknown>);
+    return true;
+  } catch (e) {
+    console.error(`[registry] failed to load topic module ${topicId}`, e);
+    return false;
   }
 }
 
 export async function loadAllTopics(): Promise<number> {
   const keys = Object.keys(topicLoaders);
+  let ok = 0;
   await Promise.all(keys.map(async (k) => {
-    const mod = (await topicLoaders[k]()) as Record<string, unknown>;
-    if (typeof mod.register === 'function') (mod.register as () => void)();
+    try {
+      await registerModule((await topicLoaders[k]()) as Record<string, unknown>);
+      ok++;
+    } catch (e) {
+      // one broken module must not brick the whole topic graph
+      console.error(`[registry] failed to load topic module ${k}`, e);
+    }
   }));
-  return keys.length;
+  return ok;
 }
 ```
 
