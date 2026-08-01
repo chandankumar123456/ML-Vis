@@ -1,11 +1,14 @@
 import type { ComponentType } from 'react';
 import type { Params, SnapshotRun, SimState } from '../engine/types';
+import type { BusEvent } from '../bus/eventBus';
 
 export interface ViewProps {
   run?: SnapshotRun;
   snapshot?: SimState | null;
   params: Params;
-  subscribe?: (fn: (e: unknown) => void) => () => void;
+  // Bus-shaped subscription so consumers narrow on the BusEvent union
+  // (matches eventBus.subscribe; ViewHost wires it up)
+  subscribe?: (fn: (e: BusEvent) => void) => () => void;
   compact?: boolean;
 }
 
