@@ -1632,7 +1632,9 @@ const PREVENT = new Set(['Space', 'ArrowLeft', 'ArrowRight']);
 export function KeyboardShortcuts() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      const t = e.target as HTMLElement | null;
+      if (t instanceof HTMLInputElement || t instanceof HTMLTextAreaElement
+        || t instanceof HTMLSelectElement || t.isContentEditable) return;
       if (PREVENT.has(e.code)) e.preventDefault();
       switch (e.code) {
         case 'Space': {
@@ -1715,6 +1717,7 @@ export function Router() {
         <Route path="/journey" element={<JourneyPage />} />
         <Route path="/exam" element={<ExamPage />} />
         <Route path="/topic/:topicId" element={<TopicPage loader={loadTopic} />} />
+        <Route path="*" element={<HomePage />} />
       </Route>
     </Routes>
   );
@@ -1762,6 +1765,37 @@ export function CommandPalette() {
 }
 ```
 
+- [ ] **Step 2b: Stub pages so Router compiles (replaced by real pages in Task 9)**
+
+> NOTE: Router imports `src/pages/*` which only ship in Task 9. To keep this commit
+> green, create minimal stubs now; Task 9 overwrites them.
+
+```tsx
+// src/pages/HomePage.tsx
+export function HomePage() { return <h1>Home</h1>; }
+```
+
+```tsx
+// src/pages/TopicPage.tsx
+import type { loadTopic } from '../registry/loadTopics';
+export function TopicPage(_: { loader: typeof loadTopic }) { return <h1>Topic</h1>; }
+```
+
+```tsx
+// src/pages/GraphPage.tsx
+export function GraphPage() { return <h1>Knowledge Graph</h1>; }
+```
+
+```tsx
+// src/pages/JourneyPage.tsx
+export function JourneyPage() { return <h1>Learning Journey</h1>; }
+```
+
+```tsx
+// src/pages/ExamPage.tsx
+export function ExamPage() { return <h1>Exam Mode</h1>; }
+```
+
 - [ ] **Step 3: Write src/styles.css (design tokens — light/dark + colorblind palettes)**
 
 ```css
@@ -1769,11 +1803,13 @@ export function CommandPalette() {
   --bg: #ffffff; --fg: #1a1a2e; --accent: #3b82f6;
   --panel: #f1f5f9; --border: #e2e8f0; --ok: #16a34a; --err: #dc2626;
   --cat1: #2563eb; --cat2: #dc2626;
+  color-scheme: light;
 }
 :root[data-theme='dark'] {
   --bg: #0f172a; --fg: #e2e8f0; --accent: #60a5fa;
   --panel: #1e293b; --border: #334155; --ok: #4ade80; --err: #f87171;
   --cat1: #60a5fa; --cat2: #f87171;
+  color-scheme: dark;
 }
 /* Colorblind palettes: override categorical colors */
 :root[data-palette='deuteranopia'] { --cat1: #0072b2; --cat2: #e69f00; }
@@ -1839,7 +1875,10 @@ body { margin: 0; font-family: system-ui, sans-serif; background: var(--bg); col
 }
 ```
 
-- [ ] **Step 4: Wire Router into main.tsx**
+- [ ] **Step 4: Wire Router into main.tsx** (REPLACES the Task 1 placeholder App usage; `src/App.tsx` is deleted — dead after rewiring)
+
+> NOTE: boot-time registration — sidebar, palette and HomePage all render from
+> `listTopics()`, so `loadAllTopics()` must complete before the first paint.
 
 ```tsx
 // src/main.tsx
@@ -1847,15 +1886,20 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
 import { Router } from './app/Router';
+import { loadAllTopics } from './registry/loadTopics';
 import './styles.css';
 
-ReactDOM.createRoot(document.getElementById('root')!).render(
-  <React.StrictMode>
-    <BrowserRouter>
-      <Router />
-    </BrowserRouter>
-  </React.StrictMode>
-);
+// Boot-time topic registration: sidebar, command palette and HomePage all render
+// from listTopics(), so modules must be registered before the first paint.
+loadAllTopics().then(() => {
+  ReactDOM.createRoot(document.getElementById('root')!).render(
+    <React.StrictMode>
+      <BrowserRouter>
+        <Router />
+      </BrowserRouter>
+    </React.StrictMode>
+  );
+});
 ```
 
 - [ ] **Step 5: Typecheck + build**
@@ -1866,7 +1910,7 @@ Expected: no TypeScript errors, build succeeds.
 - [ ] **Step 6: Commit**
 
 ```bash
-git add src/app src/styles.css src/main.tsx
+git add src/app src/pages src/styles.css src/main.tsx
 git commit -m "feat: app shell, routing, theme tokens, keyboard shortcuts"
 ```
 

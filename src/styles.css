@@ -2,11 +2,13 @@
   --bg: #ffffff; --fg: #1a1a2e; --accent: #3b82f6;
   --panel: #f1f5f9; --border: #e2e8f0; --ok: #16a34a; --err: #dc2626;
   --cat1: #2563eb; --cat2: #dc2626;
+  color-scheme: light;
 }
 :root[data-theme='dark'] {
   --bg: #0f172a; --fg: #e2e8f0; --accent: #60a5fa;
   --panel: #1e293b; --border: #334155; --ok: #4ade80; --err: #f87171;
   --cat1: #60a5fa; --cat2: #f87171;
+  color-scheme: dark;
 }
 /* Colorblind palettes: override categorical colors */
 :root[data-palette='deuteranopia'] { --cat1: #0072b2; --cat2: #e69f00; }

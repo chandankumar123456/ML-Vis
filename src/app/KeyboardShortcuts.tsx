@@ -6,7 +6,9 @@ const PREVENT = new Set(['Space', 'ArrowLeft', 'ArrowRight']);
 export function KeyboardShortcuts() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      const t = e.target as HTMLElement | null;
+      if (t instanceof HTMLInputElement || t instanceof HTMLTextAreaElement
+        || t instanceof HTMLSelectElement || (t !== null && t.isContentEditable)) return;
       if (PREVENT.has(e.code)) e.preventDefault();
       switch (e.code) {
         case 'Space': {

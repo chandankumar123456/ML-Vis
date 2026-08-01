@@ -16,6 +16,7 @@ export function Router() {
         <Route path="/journey" element={<JourneyPage />} />
         <Route path="/exam" element={<ExamPage />} />
         <Route path="/topic/:topicId" element={<TopicPage loader={loadTopic} />} />
+        <Route path="*" element={<HomePage />} />
       </Route>
     </Routes>
   );
