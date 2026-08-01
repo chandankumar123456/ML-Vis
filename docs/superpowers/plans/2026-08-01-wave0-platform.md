@@ -1916,6 +1916,10 @@ git commit -m "feat: app shell, routing, theme tokens, keyboard shortcuts"
 
 ### Task 9: Pages — Home, TopicPage (view host), Graph, Journey, Exam
 
+> ORDER NOTE: TopicPage imports PlaybackBar/ParamPanel/Tabs from `src/ui/*` which
+> ship in Task 10. Task 10 has no dependency on Task 9 — implement Task 10 FIRST,
+> then this task (keeps every commit green without stubs).
+
 **Files:**
 - Create: `src/pages/ViewHost.tsx`, `src/pages/TopicPage.tsx`, `src/pages/HomePage.tsx`, `src/lib/params.ts`
 - Skeleton for GraphPage/JourneyPage/ExamPage created here; real implementations in Tasks 13-14.
@@ -1940,6 +1944,8 @@ import { getView } from '../registry/viewRegistry';
 import { usePlaybackStore } from '../store/playbackStore';
 import { eventBus } from '../bus/eventBus';
 import type { TopicModule, Params } from '../engine/types';
+import type { BusEvent } from '../bus/eventBus';
+import type { ViewProps } from '../registry/viewRegistry';
 
 export function ViewHost({ topic, component, params }: {
   topic: TopicModule; component: string; params: Params;
@@ -1970,7 +1976,11 @@ export function ViewHost({ topic, component, params }: {
   useEffect(() => () => topic.dispose?.(), [topic]);
 
   const snapshot = useMemo(() => run?.snapshots[cursor] ?? null, [run, cursor]);
-  const subscribe = useMemo(() => (fn: (e: unknown) => void) => eventBus.subscribe(fn as never), []);
+  // bus-shaped subscribe matching ViewProps (Task 6 hardened to BusEvent)
+  const subscribe = useMemo<ViewProps['subscribe']>(
+    () => (fn: (e: BusEvent) => void) => eventBus.subscribe(fn),
+    []
+  );
 
   if (!Comp) return <div>Unknown view: {component}</div>;
   return (
