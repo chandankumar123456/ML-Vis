@@ -36,7 +36,7 @@ export interface HighlightRef {
 export interface SimEvent {
   type: string;               // 'local_min' | 'converged' | 'overflow' | ...
   label: string;
-  step: number;
+  step: number;               // 1-based: index of the snapshot that raised it
 }
 
 export interface StepExplanation {
@@ -67,6 +67,11 @@ export interface SimulationDef {
 }
 
 // ===== Test cases =====
+// Semantics for the centralized test runner (src/test/runTestCases):
+// - maxSteps defaults to 500. The run terminates when step() returns null OR
+//   when snapshots reach maxSteps (then telemetry.failedAtStep = maxSteps, "step budget").
+// - converged: true → expect failedAtStep undefined; false → expect defined.
+//   If unset, the run may terminate either way.
 export interface TestCase {
   name: string;
   params: Params;
@@ -109,7 +114,7 @@ export interface Question {
   mode: 'gate-mcq' | 'conceptual-mcq' | 'nat' | 'matrix' | 'visual';
   prompt: string;
   options?: string[];
-  answer: string | number;
+  answer: string | number | (string | number)[];   // matrix mode: arrays (match two columns)
   tolerance?: number;                 // NAT
   explanation: string;                // why correct
   trapExplanations?: Record<string, string>;  // option letter -> why wrong
@@ -161,11 +166,12 @@ export interface SessionBundle {
 }
 
 // ===== TopicModule =====
+// Layer membership is the SINGLE source of truth via TopicModule.layers buckets
+// (foundation/core/advanced). ViewRef intentionally has no layer field to prevent drift.
 export interface ViewRef {
-  slot: string;                       // 'primary' | 'secondary' | 'sidebar'
+  slot: 'primary' | 'secondary' | 'sidebar';
   component: string;                  // registry id
   title: string;
-  layers: 'foundation' | 'core' | 'advanced';
 }
 
 export interface TopicMetadata {
@@ -189,7 +195,6 @@ export interface TopicModule {
   migrations?: Record<number, (bundle: SessionBundle) => SessionBundle>;
   metadata: TopicMetadata;
   layers: { foundation: ViewRef[]; core: ViewRef[]; advanced: ViewRef[] };
-  views: ViewRef[];
   params: ParamSchema[];
   simulation: SimulationDef;
   formulas: Formula[];

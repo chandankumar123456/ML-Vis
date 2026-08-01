@@ -25,7 +25,9 @@ describe('SimulationDef contract', () => {
       const next = sim.step({ x: 0 }, s);
       if (next === null) break;
       s = next;
+      expect(steps).toBeLessThan(1000); // guard: a non-terminating step must fail, not hang
     }
-    expect(steps).toBeGreaterThanOrEqual(11);
+    // deterministic: x 0→11 takes exactly 12 calls; bound it both ways
+    expect(steps).toBe(12);
   });
 });
