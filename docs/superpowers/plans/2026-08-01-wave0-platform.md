@@ -859,6 +859,40 @@ describe('createPlayback', () => {
     expect(pb.playing).toBe(false);
     expect(pb.cursor).toBe(2);
   });
+  it('handles empty runs without breaking the cursor invariant', () => {
+    const pb = createPlayback(mkRun(0));
+    expect(pb.cursor).toBe(-1); // sentinel: no valid index
+    pb.play();
+    pb.tick();
+    pb.stepForward();
+    pb.jumpTo(3);
+    expect(pb.cursor).toBe(-1);
+    expect(pb.playing).toBe(false);
+  });
+  it('guards invalid speed input and clamps bounds', () => {
+    const pb = createPlayback(mkRun(5));
+    pb.setSpeed(NaN);
+    expect(pb.speed).toBe(1);
+    pb.setSpeed(0.05);
+    expect(pb.speed).toBe(0.1);
+    pb.setSpeed(99);
+    expect(pb.speed).toBe(8);
+  });
+  it('jumpTo clamps negative indices', () => {
+    const pb = createPlayback(mkRun(5));
+    pb.jumpTo(-5);
+    expect(pb.cursor).toBe(0);
+  });
+  it('tick advances by speed while playing', () => {
+    const pb = createPlayback(mkRun(10));
+    pb.play();
+    pb.setSpeed(3);
+    pb.tick();
+    expect(pb.cursor).toBe(3);
+    pb.pause();
+    pb.tick();
+    expect(pb.cursor).toBe(3);
+  });
 });
 ```
 
@@ -888,28 +922,36 @@ export interface Playback {
 }
 
 export function createPlayback(run: SnapshotRun): Playback {
-  let cursor = 0;
+  let cursorF = 0;               // float accumulator — never exposed raw
   let playing = false;
   let speed = 1;
-
-  const clamp = (i: number) => Math.max(0, Math.min(run.snapshots.length - 1, i));
+  const last = () => run.snapshots.length - 1;
+  const empty = () => run.snapshots.length === 0;
+  const clamp = (i: number) => Math.max(0, Math.min(last(), i));
 
   return {
     get run() { return run; },
-    get cursor() { return cursor; },
+    // empty runs (e.g. engine sandbox failure with no snapshots): sentinel -1, never a valid index
+    get cursor() { return empty() ? -1 : Math.floor(cursorF); },
     get playing() { return playing; },
     get speed() { return speed; },
-    play() { playing = true; },
+    play() { if (empty()) return; playing = true; },
     pause() { playing = false; },
-    stepForward() { cursor = clamp(cursor + 1); },
-    stepBackward() { cursor = clamp(cursor - 1); },
-    jumpTo(i: number) { cursor = clamp(i); },
-    reset() { cursor = 0; },
-    setSpeed(s: number) { speed = Math.max(0.1, Math.min(8, s)); },
+    stepForward() { if (empty()) return; cursorF = clamp(cursorF + 1); },
+    stepBackward() { if (empty()) return; cursorF = clamp(cursorF - 1); },
+    jumpTo(i: number) { if (empty()) return; cursorF = clamp(i); },
+    reset() { cursorF = 0; playing = false; },
+    setSpeed(s: number) {
+      if (!Number.isFinite(s)) return;      // NaN/Infinity would corrupt the cursor invariant
+      speed = Math.max(0.1, Math.min(8, s));
+    },
     tick() {
-      if (!playing) return;
-      cursor = clamp(cursor + speed);
-      if (cursor >= run.snapshots.length - 1) playing = false;
+      if (!playing || empty()) return;
+      cursorF = clamp(cursorF + speed);
+      if (cursorF >= last()) {
+        cursorF = last();
+        playing = false;
+      }
     },
   };
 }
@@ -1341,7 +1383,8 @@ export const usePlaybackStore = create<PlaybackState>((set, get) => ({
     const { playback, playing } = get();
     if (!playback || !playing) return;
     playback.tick();
-    if (playback.cursor !== get().cursor) {
+    // sync on cursor AND playing change: auto-stop at run end flips playing with cursor unchanged
+    if (playback.cursor !== get().cursor || playback.playing !== get().playing) {
       set({ cursor: playback.cursor, playing: playback.playing });
     }
   },

@@ -66,4 +66,38 @@ describe('createPlayback', () => {
     pb.tick(); // 2.0 → 2
     expect(pb.cursor).toBe(2);
   });
+  it('handles empty runs without breaking the cursor invariant', () => {
+    const pb = createPlayback(mkRun(0));
+    expect(pb.cursor).toBe(-1); // sentinel: no valid index
+    pb.play();
+    pb.tick();
+    pb.stepForward();
+    pb.jumpTo(3);
+    expect(pb.cursor).toBe(-1);
+    expect(pb.playing).toBe(false);
+  });
+  it('guards invalid speed input and clamps bounds', () => {
+    const pb = createPlayback(mkRun(5));
+    pb.setSpeed(NaN);
+    expect(pb.speed).toBe(1);
+    pb.setSpeed(0.05);
+    expect(pb.speed).toBe(0.1);
+    pb.setSpeed(99);
+    expect(pb.speed).toBe(8);
+  });
+  it('jumpTo clamps negative indices', () => {
+    const pb = createPlayback(mkRun(5));
+    pb.jumpTo(-5);
+    expect(pb.cursor).toBe(0);
+  });
+  it('tick advances by speed while playing', () => {
+    const pb = createPlayback(mkRun(10));
+    pb.play();
+    pb.setSpeed(3);
+    pb.tick();
+    expect(pb.cursor).toBe(3);
+    pb.pause();
+    pb.tick();
+    expect(pb.cursor).toBe(3);
+  });
 });

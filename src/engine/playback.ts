@@ -20,22 +20,27 @@ export function createPlayback(run: SnapshotRun): Playback {
   let playing = false;
   let speed = 1;
   const last = () => run.snapshots.length - 1;
+  const empty = () => run.snapshots.length === 0;
   const clamp = (i: number) => Math.max(0, Math.min(last(), i));
 
   return {
     get run() { return run; },
-    get cursor() { return Math.floor(cursorF); },
+    // empty runs (e.g. engine sandbox failure with no snapshots): sentinel -1, never a valid index
+    get cursor() { return empty() ? -1 : Math.floor(cursorF); },
     get playing() { return playing; },
     get speed() { return speed; },
-    play() { playing = true; },
+    play() { if (empty()) return; playing = true; },
     pause() { playing = false; },
-    stepForward() { cursorF = clamp(cursorF + 1); },
-    stepBackward() { cursorF = clamp(cursorF - 1); },
-    jumpTo(i: number) { cursorF = clamp(i); },
+    stepForward() { if (empty()) return; cursorF = clamp(cursorF + 1); },
+    stepBackward() { if (empty()) return; cursorF = clamp(cursorF - 1); },
+    jumpTo(i: number) { if (empty()) return; cursorF = clamp(i); },
     reset() { cursorF = 0; playing = false; },
-    setSpeed(s: number) { speed = Math.max(0.1, Math.min(8, s)); },
+    setSpeed(s: number) {
+      if (!Number.isFinite(s)) return;      // NaN/Infinity would corrupt the cursor invariant
+      speed = Math.max(0.1, Math.min(8, s));
+    },
     tick() {
-      if (!playing) return;
+      if (!playing || empty()) return;
       cursorF = clamp(cursorF + speed);
       if (cursorF >= last()) {
         cursorF = last();
