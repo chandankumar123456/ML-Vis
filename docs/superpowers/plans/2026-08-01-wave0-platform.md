@@ -4380,7 +4380,9 @@ export const slrTestCases: TestCase[] = [
   {
     name: 'normal equation equals gradient descent optimum (noise=0)',
     params: { n: 30, slope: 1.5, intercept: -0.5, noise: 0.0, useNormalEquation: false, learningRate: 0.01, epochs: 2000 },
-    maxSteps: 2000,
+    // 2001 = headroom: run stops cleanly via currentEpoch > epochs; 2000 would
+    // spuriously trip the engine's "step budget exceeded" telemetry flag
+    maxSteps: 2001,
     expect: {
       finalMetrics: {
         w: (v: number) => Math.abs(v - 1.5) < 0.05,
@@ -4413,7 +4415,9 @@ describe('simple-linear-regression testCases', () => {
       if (tc.expect.finalMetrics) {
         const m = run.snapshots[run.snapshots.length - 1].metrics;
         for (const [k, pred] of Object.entries(tc.expect.finalMetrics)) {
-          expect(pred(m[k])).toBe(true);
+          // finalMetrics may hold predicates OR plain numbers (type union)
+          if (typeof pred === 'function') expect(pred(m[k])).toBe(true);
+          else expect(m[k]).toBeCloseTo(pred, 6);
         }
       }
     });
@@ -4619,7 +4623,7 @@ function mulberry32(seed: number) {
   };
 }
 
-export function fitNormalEquation(p: Params, data: SlrData): { w: number; b: number } {
+export function fitNormalEquation(_p: Params, data: SlrData): { w: number; b: number } {
   const { xs, ys } = data;
   const n = xs.length;
   // X = [x 1]; solve [Σx² Σx; Σx n] [w; b] = [Σxy; Σy]
@@ -4632,20 +4636,20 @@ export function fitNormalEquation(p: Params, data: SlrData): { w: number; b: num
 }
 
 // ONE epoch of full-batch gradient descent: O(n). Call per step; snapshots capture history naturally.
-export function gradientStep(p: Params, data: SlrData, w: number, b: number): { w: number; b: number; mse: number } {
+export function gradientStep(p: Params, data: SlrData, w: number, b: number): { w: number; b: number } {
   const { xs, ys } = data;
   const n = xs.length;
   const lr = p.learningRate as number;
-  let dw = 0, db = 0, mse = 0;
+  let dw = 0, db = 0;
   for (let i = 0; i < n; i++) {
     const pred = w * xs[i] + b;
     const err = pred - ys[i];
     dw += 2 * err * xs[i];
     db += 2 * err;
-    mse += err * err;
   }
-  dw /= n; db /= n; mse /= n;
-  return { w: w - lr * dw, b: b - lr * db, mse };
+  dw /= n; db /= n;
+  // reported MSE always comes from mseOf(new w, new b) — see initialState/step
+  return { w: w - lr * dw, b: b - lr * db };
 }
 
 function mseOf(w: number, b: number, data: SlrData): number {
@@ -4715,7 +4719,7 @@ export const simulation = {
       },
       highlights: [],
       metrics: { w: fit.w, b: fit.b, mse },
-      events: s.events,
+      events: [...s.events], // copy: no array aliasing across snapshots
       timeline: ['Fit', 'Evaluate'],
     };
   },
@@ -4737,24 +4741,17 @@ export const slrModule: TopicModule = {
   },
   layers: {
     foundation: [
-      { slot: 'primary', component: 'scatter-plot', title: 'Geometry: Best-Fit Line', layers: 'foundation' },
-      { slot: 'primary', component: 'loss-curve', title: 'MSE over Epochs (GD mode)', layers: 'foundation' },
+      { slot: 'primary', component: 'scatter-plot', title: 'Geometry: Best-Fit Line' },
+      { slot: 'primary', component: 'loss-curve', title: 'MSE over Epochs (GD mode)' },
     ],
     core: [
-      { slot: 'sidebar', component: 'formula-explorer', title: 'Formula Explorer', layers: 'core' },
-      { slot: 'primary', component: 'mistake-view', title: 'Mistake Explorer', layers: 'core' },
+      { slot: 'sidebar', component: 'formula-explorer', title: 'Formula Explorer' },
+      { slot: 'primary', component: 'mistake-view', title: 'Mistake Explorer' },
     ],
     advanced: [
-      { slot: 'primary', component: 'question-player', title: 'GATE Questions', layers: 'advanced' },
+      { slot: 'primary', component: 'question-player', title: 'GATE Questions' },
     ],
   },
-  views: [
-    { slot: 'primary', component: 'scatter-plot', title: 'Geometry', layers: 'foundation' },
-    { slot: 'primary', component: 'loss-curve', title: 'Loss Curve', layers: 'foundation' },
-    { slot: 'primary', component: 'formula-explorer', title: 'Formulas', layers: 'core' },
-    { slot: 'primary', component: 'mistake-view', title: 'Mistakes', layers: 'core' },
-    { slot: 'primary', component: 'question-player', title: 'GATE Mode', layers: 'advanced' },
-  ],
   params: [
     { id: 'n', label: 'Number of samples', type: 'number', min: 5, max: 100, step: 1, default: 25 },
     { id: 'slope', label: 'True slope', type: 'number', min: -5, max: 5, step: 0.1, default: 2 },
@@ -4793,7 +4790,7 @@ export const slrQuestions: Question[] = [
     prompt: 'Given points (1,2), (2,3), (3,5): fit y = w·x + b by least squares. What is w?',
     options: ['0.5', '1.0', '1.5', '2.0'],
     answer: 'C',
-    explanation: 'Mean x = 2, mean y = 10/3. w = Σ(x−x̄)(y−ȳ)/Σ(x−x̄)² = (1·(−1/3) + 0·0 + 1·(5/3))/2 = (4/3)/2 = 2/3 ≈ 0.67. Hmm — recompute: Σ(x−x̄)(y−ȳ) = (−1)(2−3.33) + 0 + (1)(5−3.33) = 1.33 + 1.67 = 3; Σ(x−x̄)² = 2. w = 3/2 = 1.5.',
+    explanation: 'x̄ = 2, ȳ = 10/3. w = Σ(x−x̄)(y−ȳ)/Σ(x−x̄)² = 3/2 = 1.5; b = ȳ − w·x̄ = 1/3.',
     trapExplanations: {
       A: 'Fitting the first two points only.',
       B: 'Using the average slope between adjacent points.',
@@ -4891,6 +4888,21 @@ Expected: clean.
 git add src/topics/simple-linear-regression src/lib/math/linAlg.ts
 git commit -m "feat: simple-linear-regression reference topic (full ecosystem)"
 ```
+
+> SHIPPED: `3746a36` (8 files, 473 insertions) → reviews: spec PASS (all
+> deviations genuine); quality APPROVE with minors → fix `be374b5` (events
+> `[...s.events]` copy in both SLR and GD step(), dead `gradientStep.mse`
+> removed — snapshot MSE always from `mseOf(new w, new b)`, test-2 `maxSteps`
+> 2001 to avoid the spurious "step budget exceeded" telemetry flag).
+>
+> Same type-shape deviations as Task 16 (plan drafted against an older
+> types.ts, all verified genuine): `ViewRef` has NO `layers` field → the
+> `layers:` keys in the bucket literals above are REMOVED in the shipped
+> module; `TopicModule` has NO `views` property → the `views` array above is
+> NOT in the shipped module; test runner uses the synced
+> predicate-vs-number dispatch (`TestCase.finalMetrics` is a union type);
+> `fitNormalEquation` param renamed `p` → `_p` (TS6133 noUnusedParameters —
+> TS exempts underscore-prefixed params).
 
 ### Task 18: Test harness — run ALL topic testCases centrally + E2E smoke + session replay wiring
 
