@@ -3748,6 +3748,7 @@ export function downloadPng(canvas: HTMLCanvasElement, filename: string): void {
 ```ts
 // src/lib/exporters/recorder.ts
 import type { SnapshotRun } from '../../engine/types';
+import { snapshotToPng } from './pngExporter';
 
 /**
  * Record a run as a PNG sequence (max 60 frames).
@@ -3760,10 +3761,12 @@ export function recordRun(
   maxFrames = 60
 ): string[] {
   const frames: string[] = [];
-  const stride = Math.max(1, Math.floor(run.snapshots.length / maxFrames));
+  // ceil guarantees ceil(len/stride) <= maxFrames (floor over-shoots on len = maxFrames + 1)
+  const stride = Math.max(1, Math.ceil(run.snapshots.length / maxFrames));
   for (let i = 0; i < run.snapshots.length; i += stride) {
+    // null canvas (e.g. view not mounted) → skip frame, count reflects captured frames
     const c = render(i);
-    if (c) frames.push(c.toDataURL('image/png'));
+    if (c) frames.push(snapshotToPng(c));
   }
   return frames;
 }
@@ -3773,7 +3776,7 @@ export function recordRun(
 
 ```tsx
 // src/visualizers/Recorder.tsx
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { usePlaybackStore } from '../store/playbackStore';
 import { recordRun } from '../lib/exporters/recorder';
 
@@ -3783,6 +3786,8 @@ export function Recorder({ renderFrame }: {
   const run = usePlaybackStore((s) => s.run);
   const [recording, setRecording] = useState(false);
   const [frameCount, setFrameCount] = useState(0);
+  // retained for Wave-1 GIF/MP4 packaging (no re-render cost)
+  const framesRef = useRef<string[]>([]);
 
   const start = () => {
     if (!run) return;
@@ -3790,6 +3795,7 @@ export function Recorder({ renderFrame }: {
     // defer so UI updates before heavy work
     setTimeout(() => {
       const frames = recordRun(run, renderFrame);
+      framesRef.current = frames;
       setFrameCount(frames.length);
       setRecording(false);
     }, 50);
@@ -3817,6 +3823,12 @@ Expected: clean.
 git add src/lib/exporters src/visualizers/Recorder.tsx
 git commit -m "feat: run recorder and png exporter"
 ```
+
+> SHIPPED: `3780973` (feat, 3 files byte-for-byte) → reviews: spec PASS; quality
+> found stride off-by-one (floor can emit > maxFrames on len = maxFrames + 1),
+> frames encoded-and-discarded (Wave-1 needs them), dead `snapshotToPng` → fix
+> `dd0e77f` (ceil stride, `snapshotToPng` reuse, `framesRef` retention). No test
+> step in this task — stride/edge tests are candidates for the T18 harness pass.
 
 ### Task 16: Reference topic #1 — gradient-descent (full ecosystem)
 
