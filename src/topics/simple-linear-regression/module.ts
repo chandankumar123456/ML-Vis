@@ -177,7 +177,7 @@ export const slrModule: TopicModule = {
     { id: 'seed', label: 'Seed', type: 'number', min: 0, max: 9999, step: 1, default: 42 },
     { id: 'useNormalEquation', label: 'Use normal equation', type: 'toggle', default: true },
     { id: 'learningRate', label: 'Learning rate η', type: 'number', min: 0.001, max: 0.1, step: 0.001, default: 0.01 },
-    { id: 'epochs', label: 'Epochs (GD)', type: 'number', min: 1, max: 5000, step: 50, default: 500 },
+    { id: 'epochs', label: 'Epochs (GD)', type: 'number', min: 50, max: 5000, step: 50, default: 500 },
   ],
   simulation,
   formulas: slrFormulas,
