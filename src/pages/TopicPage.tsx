@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { getTopic } from '../registry/topicRegistry';
 import { usePlaybackStore } from '../store/playbackStore';
+import { useSessionStore } from '../store/sessionStore';
 import { useProgressStore } from '../store/progressStore';
 import { useAnalyticsStore } from '../store/analyticsStore';
 import { ViewHost } from './ViewHost';
@@ -43,6 +44,30 @@ export function TopicPage({ loader }: { loader: (id: string) => Promise<boolean>
     [topic, activeLayer]
   );
 
+  const sessions = useSessionStore((s) => s.sessions);
+  const mine = sessions.filter((x) => x.topicId === topicId);
+
+  const saveSession = () => {
+    if (!topic) return;
+    useSessionStore.getState().saveSession({
+      topicId,
+      moduleVersion: topic.version,
+      params,
+      step: usePlaybackStore.getState().cursor,
+      activeView: activeLayer,
+      bookmarks: [],
+      savedAt: new Date().toISOString(),
+    });
+  };
+
+  const resume = (savedAt: string) => {
+    const b = useSessionStore.getState().resumeSession(savedAt);
+    if (!b) return;
+    setParams(b.params);
+    usePlaybackStore.getState().setCursor(b.step);
+    setActiveLayer(b.activeView as 'foundation' | 'core' | 'advanced');
+  };
+
   useEffect(() => {
     const t = topic;
     if (!t) return;
@@ -70,6 +95,14 @@ export function TopicPage({ loader }: { loader: (id: string) => Promise<boolean>
           onChange={(id) => setActiveLayer(id as (typeof LAYER_ORDER)[number])}
         />
       </header>
+      <div className="session-row">
+        <button onClick={saveSession}>Save session</button>
+        {mine.map((s) => (
+          <button key={s.savedAt} onClick={() => resume(s.savedAt)}>
+            Resume {new Date(s.savedAt).toLocaleTimeString()}
+          </button>
+        ))}
+      </div>
       <div className="topic-layout">
         <main className="view-stack">
           {views.map((v) => (
