@@ -1,27 +1,21 @@
 // src/visualizers/LossCurve.tsx
-import { useEffect, useRef, useState } from 'react';
-import { CanvasStage, type Bounds } from '../lib/canvas/CanvasStage';
+import { useEffect, useRef } from 'react';
+import { CanvasStage, cssVar, type Bounds } from '../lib/canvas/CanvasStage';
+import { useContainerSize } from '../lib/canvas/useContainerSize';
 import type { SnapshotRun } from '../engine/types';
 import { usePlaybackStore } from '../store/playbackStore';
 
 // IMPORTANT: registered visualizers receive ViewProps ({ run, params, snapshot, subscribe }) from ViewHost.
 // Cursor-dependent components must read `cursor` from the playback store, NOT from props (ViewHost does not pass it).
+// Intentionally NOT a ViewProps component: mounted by wrapper views (e.g.
+// registerView('loss', (p) => <LossCurve run={p.run} metricKey="cost" />)),
+// so it takes explicit props instead of ViewProps.
 export function LossCurve({ run, metricKey = 'cost' }: {
   run: SnapshotRun | null; metricKey?: string;
 }) {
-  const ref = useRef<HTMLDivElement>(null);
+  const [ref, size] = useContainerSize(600, 300);
   const stageRef = useRef<CanvasStage | null>(null);
-  const [size, setSize] = useState({ w: 600, h: 300 });
   const cursor = usePlaybackStore((s) => s.cursor);
-
-  useEffect(() => {
-    const ro = new ResizeObserver(([entry]) => {
-      const { width, height } = entry.contentRect;
-      if (width > 0) setSize({ w: width, h: height });
-    });
-    if (ref.current) ro.observe(ref.current);
-    return () => ro.disconnect();
-  }, []);
 
   useEffect(() => {
     if (!ref.current) return;
@@ -40,9 +34,10 @@ export function LossCurve({ run, metricKey = 'cost' }: {
     stage.setBounds(b, size.w, size.h);
     stage.clear(size.w, size.h, 'transparent');
     stage.drawPath(values.map((v, i) => [i, v] as [number, number]), '#3b82f6', 2);
+    const fg = cssVar('--fg', '#0f172a');
     if (cursor < run.snapshots.length) {
       const v = run.snapshots[cursor].metrics[metricKey];
-      if (Number.isFinite(v)) stage.drawCircle(cursor, v, 6, '#f59e0b', 'var(--fg)');
+      if (Number.isFinite(v)) stage.drawCircle(cursor, v, 6, '#f59e0b', fg);
     }
   }, [run, cursor, metricKey, size]);
 

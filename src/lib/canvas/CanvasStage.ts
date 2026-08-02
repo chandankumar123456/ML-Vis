@@ -10,6 +10,12 @@ export function fitBounds(b: Bounds, w: number, h: number, pad = 40): Transform 
   return { scale, tx, ty };
 }
 
+/** Resolve a CSS custom property — canvas colors cannot use var() directly. */
+export function cssVar(name: string, fallback: string): string {
+  const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  return v || fallback;
+}
+
 /** Hi-DPI canvas wrapper with pan/zoom and world→screen transform. */
 export class CanvasStage {
   readonly canvas: HTMLCanvasElement;
@@ -68,7 +74,8 @@ export class CanvasStage {
     this.ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
     this.ctx.fillStyle = bg;
     this.ctx.fillRect(0, 0, w, h);
-    this.ctx.setTransform(this.dpr * this.t.scale, 0, 0, this.dpr * this.t.scale, this.dpr * this.t.tx, this.dpr * this.t.ty);
+    // draw methods apply worldToScreen() themselves — keep ctx at DPR scale only
+    this.ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
   }
 
   drawPath(points: [number, number][], stroke: string, width: number, fill?: string) {

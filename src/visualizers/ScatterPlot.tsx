@@ -1,31 +1,24 @@
 // src/visualizers/ScatterPlot.tsx
-import { useEffect, useRef, useState } from 'react';
-import { CanvasStage, type Bounds } from '../lib/canvas/CanvasStage';
+import { useEffect, useReducer, useRef } from 'react';
+import { CanvasStage, cssVar, type Bounds } from '../lib/canvas/CanvasStage';
+import { useContainerSize } from '../lib/canvas/useContainerSize';
 import { eventBus } from '../bus/eventBus';
 import type { ViewProps } from '../registry/viewRegistry';
 import type { VisualCommand } from '../engine/types';
 
-const PALETTE = { point: '#2563eb', line: 'var(--fg)', hl: '#f59e0b' };
+const PALETTE = { point: '#2563eb', hl: '#f59e0b' };
 
 export function ScatterPlot({ snapshot, params }: ViewProps) {
-  const ref = useRef<HTMLDivElement>(null);
+  const [ref, size] = useContainerSize(600, 400);
   const stageRef = useRef<CanvasStage | null>(null);
   const highlightRef = useRef<string | null>(null);
-  const [size, setSize] = useState({ w: 600, h: 400 });
-
-  useEffect(() => {
-    const ro = new ResizeObserver(([entry]) => {
-      const { width, height } = entry.contentRect;
-      if (width > 0 && height > 0) setSize({ w: width, h: height });
-    });
-    if (ref.current) ro.observe(ref.current);
-    return () => ro.disconnect();
-  }, []);
+  const [, bump] = useReducer((x: number) => x + 1, 0);
 
   useEffect(() => {
     const unsub = eventBus.subscribe((e) => {
       if (e.type === 'highlight') highlightRef.current = e.payload.id;
       if (e.type === 'clear-highlights') highlightRef.current = null;
+      bump(); // highlight state changed → redraw
     });
     return unsub;
   }, []);
@@ -71,6 +64,7 @@ export function ScatterPlot({ snapshot, params }: ViewProps) {
     stage.setBounds(bounds, size.w, size.h);
     stage.clear(size.w, size.h, 'transparent');
 
+    const fg = cssVar('--fg', '#0f172a');
     const { visuals, highlights } = snapshot;
     for (const cmd of visuals) {
       const hl = highlights.find((h) => h.id === cmd.id);
@@ -82,17 +76,17 @@ export function ScatterPlot({ snapshot, params }: ViewProps) {
           break;
         }
         case 'line': {
-          stage.drawPath(cmd.points as [number, number][], (cmd.color as string) ?? PALETTE.line, isHl ? 4 : 2);
+          stage.drawPath(cmd.points as [number, number][], (cmd.color as string) ?? fg, isHl ? 4 : 2);
           break;
         }
         case 'arrow': {
           stage.drawArrow(cmd.x1 as number, cmd.y1 as number, cmd.x2 as number, cmd.y2 as number,
-            (cmd.color as string) ?? PALETTE.line);
+            (cmd.color as string) ?? fg);
           break;
         }
       }
     }
-  }, [snapshot, size, params]);
+  }, [snapshot, size, params, bump]);
 
   return <div ref={ref} style={{ width: '100%', height: 400 }} />;
 }
