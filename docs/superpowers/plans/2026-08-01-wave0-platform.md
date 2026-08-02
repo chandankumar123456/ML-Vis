@@ -3486,6 +3486,11 @@ export const graphEdges: GraphEdge[] = [
   { source: 'classification-metrics', target: 'roc-auc', type: 'extends', note: 'ROC uses TPR/FPR from confusion matrix' },
   { source: 'perceptron', target: 'logistic-regression', type: 'related', note: 'Same linear form, different loss' },
   { source: 'gradient-descent', target: 'perceptron', type: 'requires', note: 'Perceptron rule ≈ SGD variant' },
+  // connect the previously isolated nodes (T14 review)
+  { source: 'kmeans', target: 'hierarchical-clustering', type: 'extends', note: 'Hierarchical clustering is the dendrogram alternative to K-Means' },
+  { source: 'kmeans', target: 'decision-trees', type: 'related', note: 'Both partition feature space — trees by feature splits, K-Means by distance' },
+  { source: 'cross-validation', target: 'bias-variance', type: 'related', note: 'CV estimates generalization error — the bias-variance tradeoff in action' },
+  { source: 'cross-validation', target: 'classification-metrics', type: 'related', note: 'CV uses metrics to evaluate folds' },
 ];
 
 export function edgesOf(nodeId: string): GraphEdge[] {
@@ -3504,7 +3509,7 @@ export function edgeTypeColor(t: EdgeType): string {
   }
 }
 
-export function nodeColor(cat: string): string {
+export function nodeColor(cat: GraphNode['category']): string {
   switch (cat) {
     case 'regression': return '#3b82f6';
     case 'classification': return '#8b5cf6';
@@ -3554,15 +3559,20 @@ export function KnowledgeGraph() {
       .scaleExtent([0.3, 3])
       .on('zoom', (e) => g.attr('transform', e.transform)));
 
-    const simulation = d3.forceSimulation(graphNodes as any)
-      .force('link', d3.forceLink(graphEdges as any).id((d: any) => d.id).distance(90))
+    // CLONE module-level data: d3 mutates nodes in place (x/y/vx/vy) and
+    // reifies edge source/target — pristine exports keep every mount fresh
+    const nodes = graphNodes.map((d) => ({ ...d }));
+    const links = graphEdges.map((e) => ({ ...e }));
+
+    const simulation = d3.forceSimulation(nodes as any)
+      .force('link', d3.forceLink(links as any).id((d: any) => d.id).distance(90))
       .force('charge', d3.forceManyBody().strength(-280))
       .force('center', d3.forceCenter(size.w / 2, size.h / 2))
       .force('collide', d3.forceCollide(18));
 
     const link = g.append('g')
       .selectAll('line')
-      .data(graphEdges)
+      .data(links)
       .join('line')
       .attr('stroke', (d) => edgeTypeColor(d.type))
       .attr('stroke-opacity', 0.6)
@@ -3573,7 +3583,7 @@ export function KnowledgeGraph() {
 
     const node = g.append('g')
       .selectAll('g')
-      .data(graphNodes)
+      .data(nodes)
       .join('g')
       .style('cursor', 'pointer')
       .on('click', (_e, d) => {
@@ -3685,15 +3695,30 @@ export function JourneyPage() {
 }
 ```
 
-- [ ] **Step 4: Typecheck + build**
+- [ ] **Step 4: Knowledge-graph CSS** (review fix — legend swatches were invisible)
+
+Append to `src/styles.css`:
+
+```css
+/* knowledge graph */
+.kg-wrap { position: relative; }
+.kg-legend { display: flex; flex-wrap: wrap; gap: 0.75rem; margin-top: 0.5rem; font-size: 0.8rem; }
+.kg-legend i { display: inline-block; width: 12px; height: 12px; border-radius: 2px; vertical-align: middle; margin-right: 4px; }
+```
+
+> KNOWN LIMITATION (tracked, not fixed in T14): d3 colors are hardcoded hex —
+> the app's colorblind palettes (--cat1/--cat2 overrides) do not reach SVG
+> fills/strokes. Revisit in Wave-0 QA (T19) or the palette pass.
+
+- [ ] **Step 5: Typecheck + build**
 
 Run: `npm run lint && npm run build`
 Expected: clean.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 6: Commit**
 
 ```bash
-git add src/visualizers/knowledgeGraph src/pages/GraphPage.tsx src/pages/JourneyPage.tsx
+git add src/visualizers/knowledgeGraph src/pages/GraphPage.tsx src/pages/JourneyPage.tsx src/styles.css
 git commit -m "feat: knowledge graph with d3 force layout and learning journey"
 ```
 
