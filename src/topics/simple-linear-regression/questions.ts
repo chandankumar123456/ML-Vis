@@ -1,0 +1,92 @@
+// src/topics/simple-linear-regression/questions.ts
+import type { Question } from '../../engine/types';
+
+export const slrQuestions: Question[] = [
+  {
+    id: 'slr-001',
+    mode: 'gate-mcq',
+    prompt: 'Given points (1,2), (2,3), (3,5): fit y = w·x + b by least squares. What is w?',
+    options: ['0.5', '1.0', '1.5', '2.0'],
+    answer: 'C',
+    explanation: 'x̄ = 2, ȳ = 10/3. w = Σ(x−x̄)(y−ȳ)/Σ(x−x̄)² = 3/2 = 1.5; b = ȳ − w·x̄ = 1/3.',
+    trapExplanations: {
+      A: 'Fitting the first two points only.',
+      B: 'Using the average slope between adjacent points.',
+      D: 'Dropping the y-intercept term incorrectly.',
+    },
+    concepts: ['simple-linear-regression', 'least squares'],
+    difficulty: 3,
+    tags: ['numerical'],
+  },
+  {
+    id: 'slr-002',
+    mode: 'conceptual-mcq',
+    prompt: 'Why does an outlier with a very large y-value disproportionately affect the OLS line?',
+    options: [
+      'The error term is absolute, so large errors count once',
+      'The squared error makes large residuals dominate the loss',
+      'OLS ignores residuals beyond 2 standard deviations',
+      'Outliers are always removed automatically',
+    ],
+    answer: 'B',
+    explanation: 'MSE squares residuals: a residual of 10 contributes 100× more than a residual of 1. The optimum shifts toward the outlier to reduce this quadratic penalty.',
+    trapExplanations: {
+      A: 'MAE (absolute loss) is robust; OLS uses squared loss.',
+      C: 'OLS has no automatic outlier rejection.',
+    },
+    concepts: ['simple-linear-regression', 'loss functions'],
+    difficulty: 2,
+    tags: ['conceptual'],
+  },
+  {
+    id: 'slr-003',
+    mode: 'nat',
+    prompt: 'For X = [[1,1],[2,1],[3,1]] (design matrix with bias column) and y = [2,3,5]: compute the normal equation solution. What is the value of w (first component of θ)?',
+    answer: 1.5,
+    tolerance: 0.05,
+    explanation: 'XᵀX = [[14,6],[6,3]], Xᵀy = [23,10]. Solve [[14,6],[6,3]]θ = [23,10]: det = 14·3−6·6 = 6; w = (23·3 − 6·10)/6 = (69−60)/6 = 1.5.',
+    concepts: ['simple-linear-regression', 'normal equation', 'matrix operations'],
+    difficulty: 4,
+    tags: ['matrix', 'numerical', 'indirect'],
+  },
+  {
+    id: 'slr-004',
+    mode: 'visual',
+    prompt: 'A scatter plot shows points with a clear downward trend but one point at the far right is very low. The OLS line will…',
+    options: [
+      'Be unaffected — least squares is robust',
+      'Rotate to be steeper (more negative) to approach the outlier',
+      'Become horizontal',
+      'Move up to balance the outlier',
+    ],
+    answer: 'B',
+    explanation: 'The squared residual of the extreme low point pulls the line down toward it, steepening the negative slope.',
+    trapExplanations: {
+      A: 'Squared loss is NOT robust.',
+    },
+    concepts: ['simple-linear-regression', 'outliers'],
+    difficulty: 2,
+    tags: ['visual'],
+  },
+  {
+    id: 'slr-005',
+    mode: 'gate-mcq',
+    prompt: 'Which statement about the normal equation is FALSE?',
+    options: [
+      'It requires inverting XᵀX',
+      'It fails when XᵀX is singular',
+      'It is an iterative method that approaches the optimum gradually',
+      'It gives the exact minimizer of MSE in one step',
+    ],
+    answer: 'C',
+    explanation: 'The normal equation is closed-form (one-shot), not iterative — that is exactly its advantage over gradient descent. C is false and is the answer.',
+    trapExplanations: {
+      A: 'True — inversion is required.',
+      B: 'True — singularity breaks it.',
+      D: 'True — it is the exact minimizer (when invertible).',
+    },
+    concepts: ['simple-linear-regression', 'normal equation'],
+    difficulty: 3,
+    tags: ['conceptual', 'trap'],
+  },
+];
