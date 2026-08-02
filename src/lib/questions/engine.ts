@@ -9,7 +9,7 @@ export function isCorrect(q: Question, answer: string | number): boolean {
     // epsilon guards against float artifacts (e.g. 0.43 - 0.42 = 0.010000000000000009)
     return Math.abs(a - expected) <= (q.tolerance ?? 0) + Number.EPSILON;
   }
-  return String(answer) === String(q.answer);
+  return String(answer).toLowerCase() === String(q.answer).toLowerCase();
 }
 
 export interface GradeResult {

@@ -21,7 +21,7 @@ export function QuestionPlayer({ questions, topicId }: {
   if (!q) return <div>No questions yet.</div>;
 
   return (
-    <div className="question-player" key={q.id}>
+    <div className="question-player">
       <div className="q-meta">
         <span>{q.mode}</span>
         <span>Difficulty {'★'.repeat(q.difficulty)}</span>
@@ -31,7 +31,8 @@ export function QuestionPlayer({ questions, topicId }: {
       {q.mode === 'nat' ? (
         <div className="q-input">
           <input value={input} onChange={(e) => setInput(e.target.value)}
-            placeholder="Numerical answer" />
+            placeholder="Numerical answer"
+            onKeyDown={(e) => { if (e.key === 'Enter') submit(input); }} />
           <button onClick={() => submit(input)} disabled={answered !== null}>Submit</button>
         </div>
       ) : (

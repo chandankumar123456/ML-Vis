@@ -23,6 +23,11 @@ describe('question engine', () => {
     expect(g.correct).toBe(true);
     expect(g.answered).toBe(0.42);
   });
+  it('grades MCQ case-insensitively (player submits uppercase letters)', () => {
+    const mcq: Question = { ...q, mode: 'gate-mcq', options: ['a', 'b', 'c', 'd'], answer: 'c' };
+    expect(isCorrect(mcq, 'C')).toBe(true);
+    expect(isCorrect(mcq, 'A')).toBe(false);
+  });
   it('picks N questions filtered by mode', () => {
     const pool: Question[] = [
       q,

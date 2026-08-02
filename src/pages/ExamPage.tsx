@@ -30,7 +30,7 @@ export function ExamPage() {
     return (
       <div>
         <h1>Exam Mode</h1>
-        <p>Pick a topic to start a 10-question timed drill.</p>
+        <p>Pick a topic to start a timed drill.</p>
         <div className="topic-grid">
           {listTopics().filter((t) => t.questions.length > 0).map((t) => (
             <button key={t.id} onClick={() => start(t.id)} className="topic-card">
@@ -44,7 +44,7 @@ export function ExamPage() {
 
   return (
     <div>
-      <h1>Exam — {exam.topicId}</h1>
+      <h1>Exam — {exam.topicId} ({exam.questions.length} questions)</h1>
       <p>Elapsed: {Math.floor(seconds / 60)}:{String(seconds % 60).padStart(2, '0')}</p>
       <QuestionPlayer questions={exam.questions} topicId={exam.topicId} />
       <button onClick={end}>End exam</button>
