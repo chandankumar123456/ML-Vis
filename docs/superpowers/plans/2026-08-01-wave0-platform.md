@@ -4926,11 +4926,14 @@ import { describe, it, expect } from 'vitest';
 import { loadAllTopics } from '../registry/loadTopics';
 import { listTopics } from '../registry/topicRegistry';
 import { computeRun } from '../engine/core';
-import type { TestCase } from '../engine/types';
+
+// top-level await: topic modules register() during loadAllTopics, so describe
+// generation below sees the real registry (module-scope sync listTopics() would
+// be empty — the plan's original runner generated zero topic tests)
+await loadAllTopics();
 
 describe('all topic testCases', () => {
-  it('loads every registered topic', async () => {
-    await loadAllTopics();
+  it('registers at least the Wave-0 reference topics', () => {
     expect(listTopics().length).toBeGreaterThanOrEqual(2); // Wave 0: 2 topics
   });
 
@@ -4950,13 +4953,17 @@ describe('all topic testCases', () => {
           if (tc.expect.finalMetrics) {
             const m = run.snapshots[run.snapshots.length - 1].metrics;
             for (const [k, pred] of Object.entries(tc.expect.finalMetrics)) {
-              expect(pred(m[k]), `metric ${k} failed for ${tc.name}`).toBe(true);
+              // union type: number | ((v: number) => boolean) — dispatch, don't call
+              if (typeof pred === 'function') expect(pred(m[k]), `metric ${k} failed for ${tc.name}`).toBe(true);
+              else expect(m[k]).toBeCloseTo(pred, 6);
             }
           }
           if (tc.expect.finalAlgorithm) {
             const a = run.snapshots[run.snapshots.length - 1].algorithm;
             for (const [k, pred] of Object.entries(tc.expect.finalAlgorithm)) {
-              expect(pred(a[k]), `algorithm ${k} failed for ${tc.name}`).toBe(true);
+              // union type: ParamValue | ((v: ParamValue) => boolean) — dispatch, don't call
+              if (typeof pred === 'function') expect(pred(a[k]), `algorithm ${k} failed for ${tc.name}`).toBe(true);
+              else expect(a[k]).toBe(pred);
             }
           }
           if (tc.expect.eventLabels) {
@@ -4998,8 +5005,12 @@ import { test, expect } from '@playwright/test';
 
 test('home page lists reference topics', async ({ page }) => {
   await page.goto('/');
-  await expect(page.getByRole('heading', { name: /visualizer/i })).toBeVisible();
-  await expect(page.getByText('Gradient Descent')).toBeVisible();
+  // tightened from /visualizer/i — AppShell brand h1 'GATE ML Visualizer' also
+  // matches, so strict mode sees 2 headings; /Machine Learning Visualizer/i is unique
+  await expect(page.getByRole('heading', { name: /Machine Learning Visualizer/i })).toBeVisible();
+  // tightened from getByText('Gradient Descent') — sidebar NavLink also matches;
+  // heading role uniquely targets the topic-card h3
+  await expect(page.getByRole('heading', { name: 'Gradient Descent' })).toBeVisible();
 });
 
 test('gradient descent topic plays and steps', async ({ page }) => {
@@ -5027,6 +5038,7 @@ const sessions = useSessionStore((s) => s.sessions);
 const mine = sessions.filter((x) => x.topicId === topicId);
 
 const saveSession = () => {
+  if (!topic) return; // TS narrowing; unreachable in practice (UI renders only when ready)
   useSessionStore.getState().saveSession({
     topicId,
     moduleVersion: topic.version,
@@ -5042,16 +5054,34 @@ const resume = (savedAt: string) => {
   const b = useSessionStore.getState().resumeSession(savedAt);
   if (!b) return;
   setParams(b.params);
-  usePlaybackStore.getState().setCursor(b.step);
-  setActiveLayer(b.activeView as 'foundation' | 'core' | 'advanced');
+  // validate activeView against LAYER_ORDER before casting (corrupted/stale bundles)
+  const layer = LAYER_ORDER.includes(b.activeView as (typeof LAYER_ORDER)[number])
+    ? (b.activeView as (typeof LAYER_ORDER)[number])
+    : 'foundation';
+  setActiveLayer(layer);
+  // ViewHost's debounced computeAndSet replaces the playback ~150ms after
+  // setParams, resetting cursor to 0 — restore the saved step AFTER the new
+  // run lands (one-shot; unsubscribe on fire). Same-params re-resume: no
+  // recompute occurs (computeAndSet dedupes on reference), so the guard below
+  // restores directly instead of dangling the subscription.
+  if (usePlaybackStore.getState().run?.params === b.params) {
+    usePlaybackStore.getState().setCursor(b.step);
+    return;
+  }
+  const unsub = usePlaybackStore.subscribe((s, prev) => {
+    if (prev.run !== s.run) {
+      unsub();
+      usePlaybackStore.getState().setCursor(b.step);
+    }
+  });
 };
 ```
 
-Add imports: `useSessionStore`, `usePlaybackStore`. Add UI:
+Add imports: `useSessionStore`, `usePlaybackStore`. Add UI (Save disabled until the topic loads, so a default bundle with params {} / step 0 can't be saved):
 
 ```tsx
 <div className="session-row">
-  <button onClick={saveSession}>Save session</button>
+  <button onClick={saveSession} disabled={loadState !== 'ready'}>Save session</button>
   {mine.map((s) => (
     <button key={s.savedAt} onClick={() => resume(s.savedAt)}>
       Resume {new Date(s.savedAt).toLocaleTimeString()}
@@ -5077,9 +5107,33 @@ Expected: 3 e2e tests pass.
 - [ ] **Step 6: Commit**
 
 ```bash
-git add src/test/runTestCases.test.ts playwright.config.ts e2e src/pages/TopicPage.tsx
+git add src/test/runTestCases.test.ts playwright.config.ts e2e src/pages/TopicPage.tsx src/visualizers/visualizers.test.tsx vite.config.ts
 git commit -m "feat: centralized test harness, e2e smoke tests, session replay"
 ```
+
+> SHIPPED: `49c3343` (feat) + `dfb071b` (fix) → reviews: spec PASS (all
+> deviations genuine); quality found: `finalAlgorithm` literal assertions
+> silently skipped; `resume()` cursor overwritten by ViewHost's 150ms-debounced
+> recompute (session always snapped to step 0); unsound `activeView` cast;
+> Save-before-ready → fix `dfb071b` (else-branch `toBe`, one-shot
+> `usePlaybackStore.subscribe` restoring cursor after the new run lands +
+> same-params early guard, `LAYER_ORDER.includes` validation, Save disabled
+> until `loadState === 'ready'`).
+>
+> Implementation notes: (1) The plan's original runner was BROKEN — sync
+> `listTopics()` at module scope runs before the async `loadAllTopics()`
+> completes, generating zero topic tests; shipped runner uses top-level await
+> (9 tests: 1 registry check + 5 GD + 3 SLR). (2) Smoke selectors tightened:
+> `/visualizer/i` collides with AppShell's brand h1, `getByText('Gradient
+> Descent')` collides with the sidebar NavLink — see the amended spec above.
+> (3) `vite.config.ts` gained a vitest `exclude: ['e2e/**']` — the default
+> `*.spec.*` include was collecting `e2e/smoke.spec.ts` and failing the unit
+> run. (4) `@playwright/test` was already a devDependency; `npx playwright
+> install chromium` (~306 MiB) was required once. (5) `visualizers.test.tsx`
+> (7 tests) covers the Task-12 note: MatrixAnimator subscribe lifecycle +
+> highlight round-trip, TimelineView cursor -1/boundary/beyond-last,
+> FormulaExplorer derivesFrom nav, MistakeView toggle. (6) `reuseExistingServer:
+> true` — fine locally; CI should start with a clean port (tracked).
 
 ---
 
