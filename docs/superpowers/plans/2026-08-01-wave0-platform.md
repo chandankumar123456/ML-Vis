@@ -3180,6 +3180,11 @@ describe('question engine', () => {
     expect(isCorrect(mcq, 'c')).toBe(true);
     expect(isCorrect(mcq, 'a')).toBe(false);
   });
+  it('grades MCQ case-insensitively (player submits uppercase letters)', () => {
+    const mcq: Question = { ...q, mode: 'gate-mcq', options: ['a', 'b', 'c', 'd'], answer: 'c' };
+    expect(isCorrect(mcq, 'C')).toBe(true);
+    expect(isCorrect(mcq, 'A')).toBe(false);
+  });
   it('records grade results', () => {
     const g = gradeAnswer(q, 0.42);
     expect(g.correct).toBe(true);
@@ -3215,9 +3220,11 @@ export function isCorrect(q: Question, answer: string | number): boolean {
     const a = Number(answer);
     const expected = Number(q.answer);
     if (!Number.isFinite(a)) return false;
-    return Math.abs(a - expected) <= (q.tolerance ?? 0);
+    // + Number.EPSILON: absorbs IEEE-754 float error (0.43-0.42 = 0.010000000000000009 > 0.01)
+    return Math.abs(a - expected) <= (q.tolerance ?? 0) + Number.EPSILON;
   }
-  return String(answer) === String(q.answer);
+  // case-insensitive: QuestionPlayer submits uppercase letters, topic data uses lowercase
+  return String(answer).toLowerCase() === String(q.answer).toLowerCase();
 }
 
 export interface GradeResult {
@@ -3262,7 +3269,7 @@ export function QuestionPlayer({ questions, topicId }: {
   if (!q) return <div>No questions yet.</div>;
 
   return (
-    <div className="question-player" key={q.id}>
+    <div className="question-player">
       <div className="q-meta">
         <span>{q.mode}</span>
         <span>Difficulty {'★'.repeat(q.difficulty)}</span>
@@ -3272,7 +3279,8 @@ export function QuestionPlayer({ questions, topicId }: {
       {q.mode === 'nat' ? (
         <div className="q-input">
           <input value={input} onChange={(e) => setInput(e.target.value)}
-            placeholder="Numerical answer" />
+            placeholder="Numerical answer"
+            onKeyDown={(e) => { if (e.key === 'Enter') submit(input); }} />
           <button onClick={() => submit(input)} disabled={answered !== null}>Submit</button>
         </div>
       ) : (
@@ -3346,7 +3354,7 @@ export function ExamPage() {
     return (
       <div>
         <h1>Exam Mode</h1>
-        <p>Pick a topic to start a 10-question timed drill.</p>
+        <p>Pick a topic to start a timed drill.</p>
         <div className="topic-grid">
           {listTopics().filter((t) => t.questions.length > 0).map((t) => (
             <button key={t.id} onClick={() => start(t.id)} className="topic-card">
@@ -3360,7 +3368,7 @@ export function ExamPage() {
 
   return (
     <div>
-      <h1>Exam — {exam.topicId}</h1>
+      <h1>Exam — {exam.topicId} ({exam.questions.length} questions)</h1>
       <p>Elapsed: {Math.floor(seconds / 60)}:{String(seconds % 60).padStart(2, '0')}</p>
       <QuestionPlayer questions={exam.questions} topicId={exam.topicId} />
       <button onClick={end}>End exam</button>
