@@ -2959,7 +2959,7 @@ export function MatrixAnimator({ commands }: { commands: VisualCommand[] }) {
               {m.cells.map((row, r) => (
                 <tr key={r}>
                   {row.map((cell, c) => {
-                    const cellId = `${m.id}:${r},${c}`;
+                    const cellId = m.id ? `${m.id}:${r},${c}` : `${r},${c}`; // guard: id is optional
                     const active = hl === cellId;
                     return (
                       <td key={c} data-testid={cellId}
@@ -3109,15 +3109,43 @@ export function MistakeView({ mistakes }: { mistakes: Mistake[] }) {
 }
 ```
 
-- [ ] **Step 5: Typecheck + build**
+- [ ] **Step 5: Visualizer CSS** (review fix — components render unstyled without these)
+
+Append to `src/styles.css` (design tokens; `.matrix`/`.cell`/`.tl-*` rules already exist):
+
+```css
+/* matrix animator */
+.matrix-animator { display: flex; flex-wrap: wrap; gap: 1rem; }
+.matrix-wrap { display: flex; flex-direction: column; align-items: center; gap: 0.25rem; }
+/* formula explorer */
+.formula-explorer { display: grid; gap: 1rem; }
+.formula-list { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+.pill { padding: 0.35rem 0.7rem; border: 1px solid var(--border); background: var(--panel); color: var(--fg); border-radius: 999px; cursor: pointer; font-size: 0.85rem; }
+.pill.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+.pill-row { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+.formula-detail { display: grid; gap: 0.5rem; }
+.formula-detail th, .formula-detail td { border: 1px solid var(--border); padding: 0.35rem 0.6rem; text-align: left; }
+/* mistake view */
+.mistake-view { display: grid; gap: 0.6rem; }
+.mistake-card { border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+.mistake-header { width: 100%; text-align: left; padding: 0.6rem 0.8rem; background: var(--panel); border: none; color: var(--fg); cursor: pointer; font-weight: 600; }
+.mistake-body { padding: 0.6rem 0.8rem; border-top: 1px solid var(--border); }
+.trap-badge { display: inline-block; background: var(--err); color: #fff; font-size: 0.7rem; font-weight: 700; border-radius: 4px; padding: 0.1rem 0.4rem; margin-right: 0.5rem; }
+/* timeline */
+.timeline-view { display: flex; flex-direction: column; align-items: center; gap: 0.4rem; padding: 0.5rem; }
+.timeline-view .tl-stage { width: 100%; padding: 0.35rem; border-radius: 6px; }
+.timeline-view .tl-stage.active { background: var(--panel); }
+```
+
+- [ ] **Step 6: Typecheck + build**
 
 Run: `npm run lint && npm run build`
 Expected: clean.
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 7: Commit**
 
 ```bash
-git add src/visualizers/MatrixAnimator.tsx src/visualizers/FormulaExplorer.tsx src/visualizers/TimelineView.tsx src/visualizers/MistakeView.tsx
+git add src/visualizers/MatrixAnimator.tsx src/visualizers/FormulaExplorer.tsx src/visualizers/TimelineView.tsx src/visualizers/MistakeView.tsx src/styles.css
 git commit -m "feat: matrix, formula, timeline, mistake visualizers"
 ```
 
@@ -4799,6 +4827,14 @@ git commit -m "feat: simple-linear-regression reference topic (full ecosystem)"
 ```
 
 ### Task 18: Test harness — run ALL topic testCases centrally + E2E smoke + session replay wiring
+
+> Coverage note (Task 12 review): the harness should also cover Task 12
+> visualizer behaviors — MatrixAnimator subscribe lifecycle + highlight
+> emit→consume round-trip, TimelineView stage-finding (cursor = -1 sentinel,
+> stage boundary, cursor beyond last stage), FormulaExplorer derivesFrom
+> navigation, MistakeView toggle. These are component-level; add
+> `src/visualizers/visualizers.test.tsx` if RTL can drive them (jsdom) or
+> fold the logic checks into the topic testCases.
 
 **Files:**
 - Create: `src/test/runTestCases.test.ts`, `playwright.config.ts`, `e2e/smoke.spec.ts`
