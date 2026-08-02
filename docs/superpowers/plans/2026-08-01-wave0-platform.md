@@ -3892,15 +3892,20 @@ describe('gradient-descent testCases', () => {
   for (const tc of gdTestCases) {
     it(tc.name, () => {
       const run = computeRun(simulation, tc.params, tc.maxSteps ?? 500);
-      if (tc.expect.converged) {
-        expect(run.telemetry.failedAtStep).toBeUndefined();
-      } else {
-        expect(run.telemetry.failedAtStep).toBeDefined();
+      // tri-state per engine contract (types.ts): assert only when pinned
+      if (tc.expect.converged !== undefined) {
+        if (tc.expect.converged) {
+          expect(run.telemetry.failedAtStep).toBeUndefined();
+        } else {
+          expect(run.telemetry.failedAtStep).toBeDefined();
+        }
       }
       if (tc.expect.finalMetrics) {
         const m = run.snapshots[run.snapshots.length - 1].metrics;
         for (const [k, pred] of Object.entries(tc.expect.finalMetrics)) {
-          expect(pred(m[k])).toBe(true);
+          // finalMetrics may hold predicates OR plain numbers (type union)
+          if (typeof pred === 'function') expect(pred(m[k])).toBe(true);
+          else expect(m[k]).toBeCloseTo(pred, 6);
         }
       }
       if (tc.expect.eventLabels) {
@@ -4040,7 +4045,7 @@ export const gdMistakes: Mistake[] = [
 
 ```ts
 // src/topics/gradient-descent/module.ts
-import type { TopicModule, Params, SimState, Formula } from '../../engine/types';
+import type { TopicModule, Params, SimState } from '../../engine/types';
 import { registerTopic } from '../../registry/topicRegistry';
 import { gdTestCases } from './testCases';
 import { gdFormulas } from './formulas';
@@ -4070,13 +4075,19 @@ export const simulation = {
   initialState: (p: Params): SimState => {
     const x0 = p.x0 as number;
     const f = p.f as string;
+    const g0 = gradientOf(f, x0); // sign-aware narration (review fix)
+    const narration = Math.abs(g0) < 1e-4
+      ? 'Start at x₀. The gradient here is zero — already at a stationary point; the run will report convergence immediately.'
+      : g0 > 0
+        ? 'Start at x₀. The gradient here is positive, so the function increases to the right — we move left (opposite the gradient).'
+        : 'Start at x₀. The gradient here is negative, so the function decreases to the right — we move right (opposite the gradient).';
     return {
       algorithm: { x: x0, gradient: gradientOf(f, x0), learningRate: p.learningRate as number, iteration: 0 },
       visuals: [
         { type: 'point', id: 'current', x: x0, y: valueOf(f, x0), color: '#f59e0b' },
       ],
       math: [{ latex: `f(x) = ${f === 'quadratic' ? 'x^2' : f === 'cubic' ? 'x^3' : 'x^4'}`, id: 'f' }],
-      narration: 'Start at x₀. The gradient here is positive, so the function increases to the right — we move left (opposite the gradient).',
+      narration,
       explanation: {
         changed: [],
         why: 'Initialization: pick a starting point x₀',
@@ -4163,27 +4174,19 @@ export const gdModule: TopicModule = {
   },
   layers: {
     foundation: [
-      { slot: 'primary', component: 'scatter-plot', title: 'Geometry: Descent on the Curve', layers: 'foundation' },
-      { slot: 'primary', component: 'loss-curve', title: 'Loss over Iterations', layers: 'foundation' },
+      { slot: 'primary', component: 'scatter-plot', title: 'Geometry: Descent on the Curve' },
+      { slot: 'primary', component: 'loss-curve', title: 'Loss over Iterations' },
     ],
     core: [
-      { slot: 'primary', component: 'timeline-view', title: 'Timeline: How GD Evolves', layers: 'core' },
-      { slot: 'sidebar', component: 'formula-explorer', title: 'Formula Explorer', layers: 'core' },
-      { slot: 'primary', component: 'mistake-view', title: 'Mistake Explorer', layers: 'core' },
+      { slot: 'primary', component: 'timeline-view', title: 'Timeline: How GD Evolves' },
+      { slot: 'sidebar', component: 'formula-explorer', title: 'Formula Explorer' },
+      { slot: 'primary', component: 'mistake-view', title: 'Mistake Explorer' },
     ],
     advanced: [
-      { slot: 'primary', component: 'derivation-player', title: 'Derivation: Update Rule', layers: 'advanced' },
-      { slot: 'primary', component: 'question-player', title: 'GATE Questions', layers: 'advanced' },
+      { slot: 'primary', component: 'derivation-player', title: 'Derivation: Update Rule' },
+      { slot: 'primary', component: 'question-player', title: 'GATE Questions' },
     ],
   },
-  views: [
-    { slot: 'primary', component: 'scatter-plot', title: 'Geometry', layers: 'foundation' },
-    { slot: 'primary', component: 'loss-curve', title: 'Loss Curve', layers: 'foundation' },
-    { slot: 'primary', component: 'timeline-view', title: 'Timeline', layers: 'core' },
-    { slot: 'primary', component: 'formula-explorer', title: 'Formulas', layers: 'core' },
-    { slot: 'primary', component: 'mistake-view', title: 'Mistakes', layers: 'core' },
-    { slot: 'primary', component: 'question-player', title: 'GATE Mode', layers: 'advanced' },
-  ],
   params: [
     { id: 'f', label: 'Function', type: 'select', options: [
       { value: 'quadratic', label: 'x² (convex)' },
@@ -4243,9 +4246,9 @@ export const gdQuestions: Question[] = [
     id: 'gd-002',
     mode: 'nat',
     prompt: 'Minimize f(x) = x² with η = 0.1, starting at x₀ = 5. Compute x₂ (after 2 updates). Enter your answer to 3 decimal places.',
-    answer: 2.56,
+    answer: 3.2,
     tolerance: 0.001,
-    explanation: 'x₁ = 5 − 0.1·10 = 4; x₂ = 4 − 0.1·8 = 3.2. Wait — recompute: x₁ = 5 − 0.1·(2·5) = 5 − 1 = 4. x₂ = 4 − 0.1·(2·4) = 4 − 0.8 = 3.2.',
+    explanation: 'x₁ = 5 − 0.1·(2·5) = 4; x₂ = 4 − 0.1·(2·4) = 3.2.',
     concepts: ['gradient-descent'],
     difficulty: 2,
     tags: ['numerical'],
@@ -4317,7 +4320,7 @@ export const gdQuestions: Question[] = [
 - [ ] **Step 8: Run the testCases + typecheck**
 
 Run: `npx vitest run src/topics/gradient-descent`
-Expected: PASS (4 testCases)
+Expected: PASS (5 testCases)
 
 Run: `npm run lint`
 Expected: clean.
@@ -4328,6 +4331,24 @@ Expected: clean.
 git add src/topics/gradient-descent
 git commit -m "feat: gradient-descent reference topic (full ecosystem)"
 ```
+
+> SHIPPED: `11145a5` (7 files, 437 insertions) → reviews: spec PASS (all
+> deviations genuine); quality found gd-002 answering x₃ for an x₂ prompt
+> (Critical — correct students graded wrong), numeric `finalMetrics` silently
+> skipped, hardcoded "gradient here is positive" narration lying at x₀ ≤ 0 →
+> fix `c887631` (answer 3.2 + clean explanation, `toBeCloseTo` else-branch,
+> sign-aware narration keyed on the 1e-4 threshold).
+>
+> Type-shape deviations (plan was drafted against an older types.ts — all
+> minimal, documented in `11145a5`): `TestCase.expect.converged` is optional
+> (tri-state, types.ts:73) → guard `!== undefined`; `finalMetrics` is
+> `Record<string, number | ((v: number) => boolean)>` → `typeof pred === 'function'`
+> guard; `noUnusedLocals` → drop unused `Formula` import; `ViewRef` has NO
+> `layers` field (types.ts:170 comment: "intentionally no layer field") → the
+> `layers:` keys in the bucket literals above are REMOVED in the shipped
+> module; `TopicModule` has NO `views` property — the `views` array in this
+> plan section was dead code (TopicPage renders `topic.layers[activeLayer]`)
+> and is NOT in the shipped module.
 
 ---
 
