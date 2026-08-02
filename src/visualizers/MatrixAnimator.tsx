@@ -27,7 +27,7 @@ export function MatrixAnimator({ commands }: { commands: VisualCommand[] }) {
               {m.cells.map((row, r) => (
                 <tr key={r}>
                   {row.map((cell, c) => {
-                    const cellId = `${m.id}:${r},${c}`;
+                    const cellId = m.id ? `${m.id}:${r},${c}` : `${r},${c}`;
                     const active = hl === cellId;
                     return (
                       <td key={c} data-testid={cellId}

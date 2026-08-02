@@ -72,3 +72,24 @@ body { margin: 0; font-family: system-ui, sans-serif; background: var(--bg); col
   .topic-layout { grid-template-columns: 1fr; }
   .control-panel { position: static; }
 }
+/* matrix animator */
+.matrix-animator { display: flex; flex-wrap: wrap; gap: 1rem; }
+.matrix-wrap { display: flex; flex-direction: column; align-items: center; gap: 0.25rem; }
+/* formula explorer */
+.formula-explorer { display: grid; gap: 1rem; }
+.formula-list { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+.pill { padding: 0.35rem 0.7rem; border: 1px solid var(--border); background: var(--panel); color: var(--fg); border-radius: 999px; cursor: pointer; font-size: 0.85rem; }
+.pill.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+.pill-row { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+.formula-detail { display: grid; gap: 0.5rem; }
+.formula-detail th, .formula-detail td { border: 1px solid var(--border); padding: 0.35rem 0.6rem; text-align: left; }
+/* mistake view */
+.mistake-view { display: grid; gap: 0.6rem; }
+.mistake-card { border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+.mistake-header { width: 100%; text-align: left; padding: 0.6rem 0.8rem; background: var(--panel); border: none; color: var(--fg); cursor: pointer; font-weight: 600; }
+.mistake-body { padding: 0.6rem 0.8rem; border-top: 1px solid var(--border); }
+.trap-badge { display: inline-block; background: var(--err); color: #fff; font-size: 0.7rem; font-weight: 700; border-radius: 4px; padding: 0.1rem 0.4rem; margin-right: 0.5rem; }
+/* timeline */
+.timeline-view { display: flex; flex-direction: column; align-items: center; gap: 0.4rem; padding: 0.5rem; }
+.timeline-view .tl-stage { width: 100%; padding: 0.35rem; border-radius: 6px; }
+.timeline-view .tl-stage.active { background: var(--panel); }
