@@ -2833,7 +2833,7 @@ function boundsOf(cmds: VisualCommand[]): Bounds {
 import { useEffect, useRef, useState } from 'react';
 import { CanvasStage, type Bounds } from '../lib/canvas/CanvasStage';
 import type { SnapshotRun } from '../engine/types';
-import { usePlaybackStore } from '../store/usePlaybackStore';
+import { usePlaybackStore } from '../store/playbackStore';
 
 // IMPORTANT: registered visualizers receive ViewProps ({ run, params, snapshot, subscribe }) from ViewHost.
 // Cursor-dependent components must read `cursor` from the playback store, NOT from props (ViewHost does not pass it).
