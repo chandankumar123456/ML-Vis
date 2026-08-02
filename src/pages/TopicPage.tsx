@@ -64,8 +64,27 @@ export function TopicPage({ loader }: { loader: (id: string) => Promise<boolean>
     const b = useSessionStore.getState().resumeSession(savedAt);
     if (!b) return;
     setParams(b.params);
-    usePlaybackStore.getState().setCursor(b.step);
-    setActiveLayer(b.activeView as 'foundation' | 'core' | 'advanced');
+    // validate activeView against LAYER_ORDER before casting (corrupted/stale bundles)
+    const layer = LAYER_ORDER.includes(b.activeView as (typeof LAYER_ORDER)[number])
+      ? (b.activeView as (typeof LAYER_ORDER)[number])
+      : 'foundation';
+    setActiveLayer(layer);
+    // if the current run already holds this exact params object, ViewHost's
+    // computeAndSet will dedupe and never swap the run — the one-shot below
+    // would never fire; restore the cursor directly (no overwrite risk).
+    if (usePlaybackStore.getState().run?.params === b.params) {
+      usePlaybackStore.getState().setCursor(b.step);
+      return;
+    }
+    // one-shot: ViewHost's debounced computeAndSet replaces the playback ~150ms
+    // after setParams, resetting cursor to 0 — restore the saved step AFTER the
+    // new run lands (subscribe fires when the run reference changes)
+    const unsub = usePlaybackStore.subscribe((s, prev) => {
+      if (prev.run !== s.run) {
+        unsub();
+        usePlaybackStore.getState().setCursor(b.step);
+      }
+    });
   };
 
   useEffect(() => {
@@ -96,7 +115,7 @@ export function TopicPage({ loader }: { loader: (id: string) => Promise<boolean>
         />
       </header>
       <div className="session-row">
-        <button onClick={saveSession}>Save session</button>
+        <button onClick={saveSession} disabled={loadState !== 'ready'}>Save session</button>
         {mine.map((s) => (
           <button key={s.savedAt} onClick={() => resume(s.savedAt)}>
             Resume {new Date(s.savedAt).toLocaleTimeString()}

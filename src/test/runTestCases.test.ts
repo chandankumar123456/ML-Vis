@@ -39,6 +39,7 @@ describe('all topic testCases', () => {
             for (const [k, pred] of Object.entries(tc.expect.finalAlgorithm)) {
               // union type: ParamValue | ((v: ParamValue) => boolean) — dispatch, don't call
               if (typeof pred === 'function') expect(pred(a[k]), `algorithm ${k} failed for ${tc.name}`).toBe(true);
+              else expect(a[k]).toBe(pred);
             }
           }
           if (tc.expect.eventLabels) {
