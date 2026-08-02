@@ -20,4 +20,7 @@ npm run preview    # serve build locally
 
 ## Status
 
-Wave 0 ships the platform plus two reference topics: K-Means Clustering and Simple Linear Regression.
+Wave 0: platform foundation complete — engine, playback, registry, 8 visualizer
+views, knowledge graph, exam mode, recorder, e2e smoke tests, and two reference
+topics (Gradient Descent, Simple Linear Regression) with full ecosystems
+(testCases, formulas, derivations, mistakes, GATE questions).
