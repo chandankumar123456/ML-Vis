@@ -21,6 +21,7 @@ describe('gradient-descent testCases', () => {
         const m = run.snapshots[run.snapshots.length - 1].metrics;
         for (const [k, pred] of Object.entries(tc.expect.finalMetrics)) {
           if (typeof pred === 'function') expect(pred(m[k])).toBe(true);
+          else expect(m[k]).toBeCloseTo(pred, 6);
         }
       }
       if (tc.expect.eventLabels) {

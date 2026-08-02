@@ -29,13 +29,18 @@ export const simulation = {
   initialState: (p: Params): SimState => {
     const x0 = p.x0 as number;
     const f = p.f as string;
+    const g0 = gradientOf(f, x0);
     return {
       algorithm: { x: x0, gradient: gradientOf(f, x0), learningRate: p.learningRate as number, iteration: 0 },
       visuals: [
         { type: 'point', id: 'current', x: x0, y: valueOf(f, x0), color: '#f59e0b' },
       ],
       math: [{ latex: `f(x) = ${f === 'quadratic' ? 'x^2' : f === 'cubic' ? 'x^3' : 'x^4'}`, id: 'f' }],
-      narration: 'Start at x₀. The gradient here is positive, so the function increases to the right — we move left (opposite the gradient).',
+      narration: Math.abs(g0) < 1e-4
+        ? 'Start at x₀. The gradient here is zero — already at a stationary point; the run will report convergence immediately.'
+        : g0 > 0
+          ? 'Start at x₀. The gradient here is positive, so the function increases to the right — we move left (opposite the gradient).'
+          : 'Start at x₀. The gradient here is negative, so the function decreases to the right — we move right (opposite the gradient).',
       explanation: {
         changed: [],
         why: 'Initialization: pick a starting point x₀',
