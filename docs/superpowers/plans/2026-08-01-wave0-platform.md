@@ -5206,3 +5206,46 @@ git add -A
 git commit -m "feat: wave 0 platform foundation complete"
 ```
 
+> SHIPPED: README.md `3e9338f` + corrected `e54a17e` (status line named the
+> wrong topic — now Gradient Descent + Simple Linear Regression); final suite
+> green (lint, 80/80 in 15 files, build, 3/3 e2e).
+>
+> **QA pass (evidence-driven)**: temp `e2e/qa.spec.ts` (15 tests, screenshots
+> to temp dir, cleaned up after) → **11/15 initial, 4 FAIL**: items 5/6/7 all
+> rendered "Unknown view: scatter-plot / timeline-view / formula-explorer /
+> mistake-view" and item 13 had no theme/palette control. Root cause CONFIRMED:
+> the view registry was never populated — nothing called `registerView()` in
+> production; `settingsStore` + `ThemeProvider` worked but no UI invoked them.
+> Fix `ab985b5` (16 files, +191/−21): `ViewProps.topic?: TopicModule`,
+> `TopicModule.lossMetricKey?: string`, ViewHost passes `topic`, four
+> visualizers gained `topic`/`snapshot` fallbacks, NEW `DerivationPlayer.tsx`
+> (exact brief code, reveal-step + prev/next), NEW `registerViews.tsx`
+> registering all 8 ids (`registerAllViews()` called from `main.tsx` before
+> `loadAllTopics()`), GD `lossMetricKey: 'f'`, SLR `lossMetricKey: 'mse'`,
+> AppShell settings row (theme toggle ☀/🌙 + palette select, persisted),
+> runner test "every topic layer view is registered", DerivationPlayer test,
+> `.derivation-*`/`.settings-row` CSS.
+>
+> **Browser re-verification (7/7 PASS, evidence-driven)**: foundation canvases
+> pixel-sampled non-blank (scatter + loss), zero "Unknown view" anywhere;
+> timeline stages Initialization/Iteration/Convergence; formula pills
+> f/grad/update + "← derives from" nav both ways; mistake cards expand;
+> question-player MCQ feedback; derivation-player reveals steps; lr slider
+> recompute `Step 0/53 → Step 0/2`; SLR normal-equation toggle `Step 0/0 ↔
+> Step 0/499`; Dark button → `dataset.theme='dark'` persists across reload;
+> palette persists; regression sweep / /graph /journey /exam zero console
+> errors. Checklist: **15/15 PASS** (item 14 = save → reload → *Resume*
+> restores params/step/view — verified exact: GD `Step 2/53`, SLR η 0.05;
+> auto-resume on reload is intentionally NOT a feature — reload resets to
+> defaults + shows the Resume button, which is the designed flow).
+>
+> QA also confirmed a pre-existing cosmetic bug (epochs range input showed
+> 501 for 500 due to min=1/step=50 snapping) → fixed `28fd028` (min=50,
+> step=50 → 500 on-step; test cases use 2000 = 50+50·39 ✓) + `.gitignore`
+> gained `opencode.jsonc` so the final `git add -A` stays clean.
+>
+> **Wave 0 complete.** Handoff reference: `2026-08-01-waves1-7-topics.md`
+> (Waves 1–7, 40 topic tasks; Wave 1 = Regression cluster: ridge, lasso,
+> polynomial-regression, learning-curves).
+
+
