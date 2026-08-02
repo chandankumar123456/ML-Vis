@@ -18,7 +18,7 @@ export const slrTestCases: TestCase[] = [
   {
     name: 'normal equation equals gradient descent optimum (noise=0)',
     params: { n: 30, slope: 1.5, intercept: -0.5, noise: 0.0, useNormalEquation: false, learningRate: 0.01, epochs: 2000 },
-    maxSteps: 2000,
+    maxSteps: 2001,
     expect: {
       finalMetrics: {
         w: (v: number) => Math.abs(v - 1.5) < 0.05,

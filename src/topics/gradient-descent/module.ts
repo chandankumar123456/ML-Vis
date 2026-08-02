@@ -105,7 +105,7 @@ export const simulation = {
       },
       highlights: [{ panel: 'canvas', id: 'current', intensity: 1 }],
       metrics: { x: xNext, f: valueOf(f, xNext), gradient: gradientOf(f, xNext), iteration },
-      events: s.events,
+      events: [...s.events],
       timeline: [...s.timeline, 'Iteration'],
     };
   },

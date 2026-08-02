@@ -54,20 +54,19 @@ export function fitNormalEquation(_p: Params, data: SlrData): { w: number; b: nu
 }
 
 // ONE epoch of full-batch gradient descent: O(n). Call per step; snapshots capture history naturally.
-export function gradientStep(p: Params, data: SlrData, w: number, b: number): { w: number; b: number; mse: number } {
+export function gradientStep(p: Params, data: SlrData, w: number, b: number): { w: number; b: number } {
   const { xs, ys } = data;
   const n = xs.length;
   const lr = p.learningRate as number;
-  let dw = 0, db = 0, mse = 0;
+  let dw = 0, db = 0;
   for (let i = 0; i < n; i++) {
     const pred = w * xs[i] + b;
     const err = pred - ys[i];
     dw += 2 * err * xs[i];
     db += 2 * err;
-    mse += err * err;
   }
-  dw /= n; db /= n; mse /= n;
-  return { w: w - lr * dw, b: b - lr * db, mse };
+  dw /= n; db /= n;
+  return { w: w - lr * dw, b: b - lr * db };
 }
 
 function mseOf(w: number, b: number, data: SlrData): number {
@@ -137,7 +136,7 @@ export const simulation = {
       },
       highlights: [],
       metrics: { w: fit.w, b: fit.b, mse },
-      events: s.events,
+      events: [...s.events],
       timeline: ['Fit', 'Evaluate'],
     };
   },
