@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo } from 'react';
 import { getView } from '../registry/viewRegistry';
-import { usePlaybackStore } from '../store/playbackStore';
+import { ensurePlaybackLoop, usePlaybackStore } from '../store/playbackStore';
 import { eventBus } from '../bus/eventBus';
 import type { TopicModule, Params } from '../engine/types';
 import type { BusEvent } from '../bus/eventBus';
@@ -12,16 +12,11 @@ export function ViewHost({ topic, component, params }: {
   const Comp = getView(component);
   const run = usePlaybackStore((s) => s.run);
   const cursor = usePlaybackStore((s) => s.cursor);
-  const frame = useRef<number>(0);
 
-  // animation loop drives playback ticks at 60fps
+  // join the shared animation loop (idempotent): exactly one tick per frame
+  // across ALL mounted hosts — per-host loops would advance speed ×N
   useEffect(() => {
-    const loop = () => {
-      usePlaybackStore.getState().tick();
-      frame.current = requestAnimationFrame(loop);
-    };
-    frame.current = requestAnimationFrame(loop);
-    return () => cancelAnimationFrame(frame.current);
+    ensurePlaybackLoop();
   }, []);
 
   // re-compute snapshots when params change (debounced 150ms)
@@ -32,6 +27,7 @@ export function ViewHost({ topic, component, params }: {
     return () => clearTimeout(id);
   }, [topic, params]);
 
+  // dispose may fire once per host (N views per topic); module teardown must be idempotent
   useEffect(() => () => topic.dispose?.(), [topic]);
 
   const snapshot = useMemo(() => run?.snapshots[cursor] ?? null, [run, cursor]);

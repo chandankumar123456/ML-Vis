@@ -28,10 +28,14 @@ export const usePlaybackStore = create<PlaybackState>((set, get) => ({
   speed: 1,
 
   computeAndSet: (sim, params) => {
-    const run = computeRun(sim, params);
-    const playback = createPlayback(run);
+    // dedupe: every ViewHost on a page shares the same sim + params object ref;
+    // recomputing per host would multiply synchronous simulation work
+    const { run } = get();
+    if (run && run.params === params) return;
+    const run2 = computeRun(sim, params);
+    const playback = createPlayback(run2);
     // mirror playback.cursor so empty-run sentinel (-1) propagates immediately
-    set({ run, playback, cursor: playback.cursor, playing: false });
+    set({ run: run2, playback, cursor: playback.cursor, playing: false });
   },
 
   setCursor: (i) => {
@@ -84,3 +88,20 @@ export const usePlaybackStore = create<PlaybackState>((set, get) => ({
     }
   },
 }));
+
+// Single shared animation loop — exactly ONE tick per animation frame no matter
+// how many ViewHosts mount. Per-host loops would advance playback speed ×N
+// (each tick() advances by `speed`), breaking the "steps per frame tick" contract.
+let rafId: number | null = null;
+function loop(): void {
+  usePlaybackStore.getState().tick();
+  rafId = requestAnimationFrame(loop);
+}
+export function ensurePlaybackLoop(): void {
+  if (rafId === null) rafId = requestAnimationFrame(loop);
+}
+
+/** vitest hook: clears singleton-loop bookkeeping between tests */
+export function __resetPlaybackLoop(): void {
+  rafId = null;
+}

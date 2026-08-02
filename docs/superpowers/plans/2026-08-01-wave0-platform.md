@@ -1382,10 +1382,14 @@ export const usePlaybackStore = create<PlaybackState>((set, get) => ({
   speed: 1,
 
   computeAndSet: (sim, params) => {
-    const run = computeRun(sim, params);
-    const playback = createPlayback(run);
+    // dedupe: every ViewHost on a page shares the same sim + params object ref;
+    // recomputing per host would multiply synchronous simulation work
+    const { run } = get();
+    if (run && run.params === params) return;
+    const run2 = computeRun(sim, params);
+    const playback = createPlayback(run2);
     // mirror playback.cursor so empty-run sentinel (-1) propagates immediately
-    set({ run, playback, cursor: playback.cursor, playing: false });
+    set({ run: run2, playback, cursor: playback.cursor, playing: false });
   },
 
   setCursor: (i) => {
@@ -1438,6 +1442,25 @@ export const usePlaybackStore = create<PlaybackState>((set, get) => ({
     }
   },
 }));
+```
+
+```ts
+// src/store/playbackStore.ts (bottom of file)
+
+// ONE shared animation loop for the whole app: per-host loops would tick N
+// times per frame (speed ×N). Idempotent — subsequent calls are no-ops.
+let rafId: number | null = null;
+function loop(): void {
+  usePlaybackStore.getState().tick();
+  rafId = requestAnimationFrame(loop);
+}
+export function ensurePlaybackLoop(): void {
+  if (rafId === null) rafId = requestAnimationFrame(loop);
+}
+/** vitest hook: clears singleton-loop bookkeeping between tests */
+export function __resetPlaybackLoop(): void {
+  rafId = null;
+}
 ```
 
 ```ts
@@ -1939,9 +1962,9 @@ export function defaultParams(schema: ParamSchema[]): Params {
 
 ```tsx
 // src/pages/ViewHost.tsx
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo } from 'react';
 import { getView } from '../registry/viewRegistry';
-import { usePlaybackStore } from '../store/playbackStore';
+import { ensurePlaybackLoop, usePlaybackStore } from '../store/playbackStore';
 import { eventBus } from '../bus/eventBus';
 import type { TopicModule, Params } from '../engine/types';
 import type { BusEvent } from '../bus/eventBus';
@@ -1953,16 +1976,11 @@ export function ViewHost({ topic, component, params }: {
   const Comp = getView(component);
   const run = usePlaybackStore((s) => s.run);
   const cursor = usePlaybackStore((s) => s.cursor);
-  const frame = useRef<number>(0);
 
-  // animation loop drives playback ticks at 60fps
+  // ONE shared animation loop per app (not per host): per-host rAF loops
+  // would tick N times per frame → playback speed ×N.
   useEffect(() => {
-    const loop = () => {
-      usePlaybackStore.getState().tick();
-      frame.current = requestAnimationFrame(loop);
-    };
-    frame.current = requestAnimationFrame(loop);
-    return () => cancelAnimationFrame(frame.current);
+    ensurePlaybackLoop();
   }, []);
 
   // re-compute snapshots when params change (debounced 150ms)
@@ -1973,6 +1991,8 @@ export function ViewHost({ topic, component, params }: {
     return () => clearTimeout(id);
   }, [topic, params]);
 
+  // dispose may fire once per host (N views per topic); module teardown must
+  // be idempotent
   useEffect(() => () => topic.dispose?.(), [topic]);
 
   const snapshot = useMemo(() => run?.snapshots[cursor] ?? null, [run, cursor]);
@@ -1995,9 +2015,10 @@ export function ViewHost({ topic, component, params }: {
 
 ```tsx
 // src/pages/TopicPage.tsx
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { getTopic } from '../registry/topicRegistry';
+import { usePlaybackStore } from '../store/playbackStore';
 import { useProgressStore } from '../store/progressStore';
 import { useAnalyticsStore } from '../store/analyticsStore';
 import { ViewHost } from './ViewHost';
@@ -2008,24 +2029,34 @@ import { defaultParams } from '../lib/params';
 import type { Params } from '../engine/types';
 
 const LAYER_ORDER = ['foundation', 'core', 'advanced'] as const;
+type LoadState = 'loading' | 'ready' | 'error';
 
-export function TopicPage({ loader }: { loader: (id: string) => Promise<void> }) {
+// loader resolves false when the topic can't be loaded → error state, never
+// an infinite "Loading topic…" (loadTopic returns Promise<boolean>)
+export function TopicPage({ loader }: { loader: (id: string) => Promise<boolean> }) {
   const { topicId = '' } = useParams();
-  const [loaded, setLoaded] = useState(false);
+  const [loadState, setLoadState] = useState<LoadState>('loading');
   const [activeLayer, setActiveLayer] = useState<(typeof LAYER_ORDER)[number]>('foundation');
   const [params, setParams] = useState<Params>({});
 
-  useEffect(() => {
-    loader(topicId).then(() => {
+  const load = useCallback(() => {
+    setLoadState('loading');
+    // drop the previous topic's run so the scrubber never shows stale data
+    usePlaybackStore.setState({ run: null, playback: null, cursor: 0, playing: false });
+    loader(topicId).then((ok) => {
+      if (!ok) { setLoadState('error'); return; }
       const t = getTopic(topicId);
-      if (t) setParams(defaultParams(t.params));
-      setLoaded(true);
+      if (!t) { setLoadState('error'); return; }
+      setParams(defaultParams(t.params));
+      setLoadState('ready');
       useProgressStore.getState().setLastVisited(topicId);
       useAnalyticsStore.getState().recordVisit(topicId);
     });
   }, [topicId, loader]);
 
-  const topic = loaded ? getTopic(topicId) : undefined;
+  useEffect(() => { load(); }, [load]);
+
+  const topic = loadState === 'ready' ? getTopic(topicId) : undefined;
   const views = useMemo(
     () => (topic ? topic.layers[activeLayer] : []),
     [topic, activeLayer]
@@ -2037,6 +2068,15 @@ export function TopicPage({ loader }: { loader: (id: string) => Promise<void> })
     for (const v of views) useProgressStore.getState().markView(t.id, v.component);
   }, [topic, views]);
 
+  if (loadState === 'error') {
+    return (
+      <div>
+        <h1>Topic not found</h1>
+        <p>We couldn't load “{topicId}”.</p>
+        <button onClick={load}>Retry</button>
+      </div>
+    );
+  }
   if (!topic) return <div>Loading topic…</div>;
 
   return (
@@ -2118,15 +2158,119 @@ export function ExamPage() {
 }
 ```
 
-- [ ] **Step 4: Verify typecheck + build**
+- [ ] **Step 4: Write ViewHost integration test**
+
+Locks the shared-loop contract (one tick per frame across N hosts — per-host loops
+would advance playback speed ×N), the 150ms compute debounce, and the unknown-view
+fallback. `ensurePlaybackLoop` keeps module-level `rafId`, so the test resets it via
+the exported `__resetPlaybackLoop()` vitest hook and drives frames by invoking the
+captured rAF callback manually.
+
+```tsx
+// src/pages/ViewHost.test.tsx
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { render, screen, act } from '@testing-library/react';
+import { ViewHost } from './ViewHost';
+import { registerView, type ViewProps } from '../registry/viewRegistry';
+import { __resetPlaybackLoop, usePlaybackStore } from '../store/playbackStore';
+import type { TopicModule, SimulationDef, Params } from '../engine/types';
+import type { ComponentType } from 'react';
+
+// controllable rAF: capture the callback + count scheduling instead of running it
+let rafCb: FrameRequestCallback | null = null;
+let scheduleCount = 0;
+
+beforeEach(() => {
+  rafCb = null;
+  scheduleCount = 0;
+  __resetPlaybackLoop(); // module-level loop bookkeeping persists across tests
+  vi.useFakeTimers();
+  vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => {
+    scheduleCount++;
+    rafCb = cb;
+    return scheduleCount;
+  });
+  usePlaybackStore.setState({ run: null, playback: null, cursor: 0, playing: false, speed: 1 });
+});
+
+afterEach(() => {
+  vi.useRealTimers();
+  vi.unstubAllGlobals();
+});
+
+const quadratic: SimulationDef = {
+  initialState: (p: Params) => ({
+    algorithm: { x: p.x0 as number },
+    visuals: [], math: [], narration: '',
+    explanation: { changed: [], why: '', dependsOn: [], gateConcepts: [] },
+    highlights: [], metrics: {}, events: [], timeline: ['init'],
+  }),
+  step: (_p, s) => {
+    const x = s.algorithm.x as number;
+    if (Math.abs(x) < 1e-6) return null;
+    return { ...s, algorithm: { x: x - 0.1 * 2 * x }, timeline: [...s.timeline, 'step'] };
+  },
+};
+
+const topic = {
+  id: 'vh', title: 'VH', version: 1,
+  metadata: { gateWeightage: 'High', revisionPriority: 'P0' },
+  layers: { foundation: [], core: [], advanced: [] },
+  params: [],
+  simulation: quadratic,
+  formulas: [], derivations: [], questions: [], comparisons: [], failureDemos: [], mistakes: [], testCases: [],
+} as unknown as TopicModule;
+
+const SnapView: ComponentType<ViewProps> = ({ snapshot }) => (
+  <span data-testid="x">
+    {snapshot ? String((snapshot.algorithm as { x?: number }).x ?? '') : 'none'}
+  </span>
+);
+registerView('vh-snap', SnapView);
+
+describe('ViewHost', () => {
+  it('debounces computeAndSet by 150ms and renders the snapshot', () => {
+    render(<ViewHost topic={topic} component="vh-snap" params={{ x0: 5 }} />);
+    expect(screen.getByTestId('x').textContent).toBe('none');
+    act(() => { vi.advanceTimersByTime(149); });
+    expect(screen.getByTestId('x').textContent).toBe('none');
+    act(() => { vi.advanceTimersByTime(1); });
+    expect(screen.getByTestId('x').textContent).toBe('5');
+  });
+
+  it('shares ONE animation loop across hosts — one tick per frame', () => {
+    render(<ViewHost topic={topic} component="vh-snap" params={{ x0: 5 }} />);
+    act(() => { vi.advanceTimersByTime(150); });
+    expect(scheduleCount).toBe(1); // first host schedules the singleton loop
+    // second host must NOT schedule a second loop (per-host loops → speed ×N)
+    render(<ViewHost topic={topic} component="vh-snap" params={{ x0: 5 }} />);
+    expect(scheduleCount).toBe(1);
+    // play + drive 2 frames → exactly 2 advances, not 2×hosts
+    usePlaybackStore.getState().play();
+    act(() => { rafCb?.(0); });
+    act(() => { rafCb?.(0); });
+    expect(usePlaybackStore.getState().cursor).toBe(2);
+  });
+
+  it('renders an unknown-view fallback', () => {
+    render(<ViewHost topic={topic} component="vh-missing" params={{ x0: 5 }} />);
+    expect(screen.getByText('Unknown view: vh-missing')).toBeTruthy();
+  });
+});
+```
+
+- [ ] **Step 5: Verify typecheck + build**
 
 Run: `npm run lint`
 Expected: no TypeScript errors.
 
+Run: `npx vitest run src/pages/ViewHost.test.tsx`
+Expected: 3 tests pass.
+
 Run: `npm run build`
 Expected: build succeeds.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 6: Commit**
 
 ```bash
 git add src/pages src/lib/params.ts

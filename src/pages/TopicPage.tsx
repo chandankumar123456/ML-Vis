@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { getTopic } from '../registry/topicRegistry';
+import { usePlaybackStore } from '../store/playbackStore';
 import { useProgressStore } from '../store/progressStore';
 import { useAnalyticsStore } from '../store/analyticsStore';
 import { ViewHost } from './ViewHost';
@@ -11,24 +12,32 @@ import { defaultParams } from '../lib/params';
 import type { Params } from '../engine/types';
 
 const LAYER_ORDER = ['foundation', 'core', 'advanced'] as const;
+type LoadState = 'loading' | 'ready' | 'error';
 
-export function TopicPage({ loader }: { loader: (id: string) => Promise<unknown> }) {
+export function TopicPage({ loader }: { loader: (id: string) => Promise<boolean> }) {
   const { topicId = '' } = useParams();
-  const [loaded, setLoaded] = useState(false);
+  const [loadState, setLoadState] = useState<LoadState>('loading');
   const [activeLayer, setActiveLayer] = useState<(typeof LAYER_ORDER)[number]>('foundation');
   const [params, setParams] = useState<Params>({});
 
-  useEffect(() => {
-    loader(topicId).then(() => {
+  const load = useCallback(() => {
+    setLoadState('loading');
+    // drop the previous topic's run so the scrubber never shows stale data
+    usePlaybackStore.setState({ run: null, playback: null, cursor: 0, playing: false });
+    loader(topicId).then((ok) => {
+      if (!ok) { setLoadState('error'); return; }
       const t = getTopic(topicId);
-      if (t) setParams(defaultParams(t.params));
-      setLoaded(true);
+      if (!t) { setLoadState('error'); return; }
+      setParams(defaultParams(t.params));
+      setLoadState('ready');
       useProgressStore.getState().setLastVisited(topicId);
       useAnalyticsStore.getState().recordVisit(topicId);
     });
   }, [topicId, loader]);
 
-  const topic = loaded ? getTopic(topicId) : undefined;
+  useEffect(() => { load(); }, [load]);
+
+  const topic = loadState === 'ready' ? getTopic(topicId) : undefined;
   const views = useMemo(
     () => (topic ? topic.layers[activeLayer] : []),
     [topic, activeLayer]
@@ -40,6 +49,15 @@ export function TopicPage({ loader }: { loader: (id: string) => Promise<unknown>
     for (const v of views) useProgressStore.getState().markView(t.id, v.component);
   }, [topic, views]);
 
+  if (loadState === 'error') {
+    return (
+      <div>
+        <h1>Topic not found</h1>
+        <p>We couldn't load “{topicId}”.</p>
+        <button onClick={load}>Retry</button>
+      </div>
+    );
+  }
   if (!topic) return <div>Loading topic…</div>;
 
   return (
