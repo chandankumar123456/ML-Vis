@@ -87,6 +87,11 @@ export const graphEdges: GraphEdge[] = [
   { source: 'classification-metrics', target: 'roc-auc', type: 'extends', note: 'ROC uses TPR/FPR from confusion matrix' },
   { source: 'perceptron', target: 'logistic-regression', type: 'related', note: 'Same linear form, different loss' },
   { source: 'gradient-descent', target: 'perceptron', type: 'requires', note: 'Perceptron rule ≈ SGD variant' },
+  // connect the previously isolated nodes (T14 review)
+  { source: 'kmeans', target: 'hierarchical-clustering', type: 'extends', note: 'Hierarchical clustering is the dendrogram alternative to K-Means' },
+  { source: 'kmeans', target: 'decision-trees', type: 'related', note: 'Both partition feature space — trees by feature splits, K-Means by distance' },
+  { source: 'cross-validation', target: 'bias-variance', type: 'related', note: 'CV estimates generalization error — the bias-variance tradeoff in action' },
+  { source: 'cross-validation', target: 'classification-metrics', type: 'related', note: 'CV uses metrics to evaluate folds' },
 ];
 
 export function edgesOf(nodeId: string): GraphEdge[] {
@@ -105,7 +110,7 @@ export function edgeTypeColor(t: EdgeType): string {
   }
 }
 
-export function nodeColor(cat: string): string {
+export function nodeColor(cat: GraphNode['category']): string {
   switch (cat) {
     case 'regression': return '#3b82f6';
     case 'classification': return '#8b5cf6';

@@ -33,15 +33,18 @@ export function KnowledgeGraph() {
       .scaleExtent([0.3, 3])
       .on('zoom', (e) => g.attr('transform', e.transform)));
 
-    const simulation = d3.forceSimulation(graphNodes as any)
-      .force('link', d3.forceLink(graphEdges as any).id((d: any) => d.id).distance(90))
+    const nodes = graphNodes.map((d) => ({ ...d }));
+    const links = graphEdges.map((e) => ({ ...e }));
+
+    const simulation = d3.forceSimulation(nodes as any)
+      .force('link', d3.forceLink(links as any).id((d: any) => d.id).distance(90))
       .force('charge', d3.forceManyBody().strength(-280))
       .force('center', d3.forceCenter(size.w / 2, size.h / 2))
       .force('collide', d3.forceCollide(18));
 
     const link = g.append('g')
       .selectAll('line')
-      .data(graphEdges)
+      .data(links)
       .join('line')
       .attr('stroke', (d) => edgeTypeColor(d.type))
       .attr('stroke-opacity', 0.6)
@@ -52,7 +55,7 @@ export function KnowledgeGraph() {
 
     const node = g.append('g')
       .selectAll('g')
-      .data(graphNodes)
+      .data(nodes)
       .join('g')
       .style('cursor', 'pointer')
       .on('click', (_e, d) => {

@@ -93,3 +93,7 @@ body { margin: 0; font-family: system-ui, sans-serif; background: var(--bg); col
 .timeline-view { display: flex; flex-direction: column; align-items: center; gap: 0.4rem; padding: 0.5rem; }
 .timeline-view .tl-stage { width: 100%; padding: 0.35rem; border-radius: 6px; }
 .timeline-view .tl-stage.active { background: var(--panel); }
+/* knowledge graph */
+.kg-wrap { position: relative; }
+.kg-legend { display: flex; flex-wrap: wrap; gap: 0.75rem; margin-top: 0.5rem; font-size: 0.8rem; }
+.kg-legend i { display: inline-block; width: 12px; height: 12px; border-radius: 2px; vertical-align: middle; margin-right: 4px; }
