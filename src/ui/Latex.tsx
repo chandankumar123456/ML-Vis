@@ -7,8 +7,10 @@ export function Latex({ tex, block = false }: { tex: string; block?: boolean }) 
     try {
       return katex.renderToString(tex, { throwOnError: false, displayMode: block });
     } catch {
-      return tex;
+      return null; // trust boundary: fall back to escaped text, never raw HTML
     }
   }, [tex, block]);
-  return <span dangerouslySetInnerHTML={{ __html: html }} aria-label={tex} />;
+  return html === null
+    ? <span aria-label={tex}>{tex}</span>
+    : <span dangerouslySetInnerHTML={{ __html: html }} aria-label={tex} />;
 }

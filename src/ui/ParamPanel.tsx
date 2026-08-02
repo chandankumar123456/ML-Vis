@@ -11,13 +11,15 @@ export function ParamPanel({ schema, values, onChange }: {
       <h3>Parameters</h3>
       {schema.map((s) => {
         const set = (v: ParamValue) => onChange({ ...values, [s.id]: v });
+        // fall back to schema default when a key is missing (partial params)
+        const v = values[s.id] ?? s.default;
         switch (s.type) {
           case 'number':
-            return <Slider key={s.id} schema={s} value={values[s.id] as number} onChange={set} />;
+            return <Slider key={s.id} schema={s} value={v as number} onChange={set} />;
           case 'toggle':
-            return <Toggle key={s.id} label={s.label} value={values[s.id] as boolean} onChange={set} />;
+            return <Toggle key={s.id} label={s.label} value={v as boolean} onChange={set} />;
           case 'select':
-            return <Select key={s.id} schema={s} value={values[s.id] as string} onChange={set} />;
+            return <Select key={s.id} schema={s} value={v as string} onChange={set} />;
           default:
             return null;
         }

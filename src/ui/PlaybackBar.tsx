@@ -5,7 +5,10 @@ export function PlaybackBar() {
   const playing = usePlaybackStore((s) => s.playing);
   const speed = usePlaybackStore((s) => s.speed);
   const run = usePlaybackStore((s) => s.run);
-  const max = run ? run.snapshots.length - 1 : 0;
+  // empty-run sentinel: engine mirrors cursor -1 for failed runs (0 snapshots);
+  // a range input with max < min is invalid HTML, so clamp and show '—'
+  const max = run ? Math.max(0, run.snapshots.length - 1) : 0;
+  const hasRun = run !== null && run.snapshots.length > 0;
 
   return (
     <div className="playback-bar" role="toolbar" aria-label="Playback">
@@ -19,11 +22,12 @@ export function PlaybackBar() {
       <button aria-label="Next" onClick={() => usePlaybackStore.getState().stepForward()}>⏭</button>
       <button aria-label="Reset" onClick={() => usePlaybackStore.getState().reset()}>⟲</button>
       <input
-        type="range" min={0} max={max} value={cursor}
+        type="range" min={0} max={max} value={Math.max(0, cursor)}
         aria-label="Step scrubber"
+        disabled={!hasRun}
         onChange={(e) => usePlaybackStore.getState().setCursor(Number(e.target.value))}
       />
-      <span>Step {cursor}/{max}</span>
+      <span>Step {hasRun ? `${cursor}/${max}` : '—'}</span>
       <select
         aria-label="Speed"
         value={speed}

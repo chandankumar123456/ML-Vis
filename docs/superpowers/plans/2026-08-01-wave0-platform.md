@@ -2161,6 +2161,24 @@ describe('PlaybackBar', () => {
     // cursor should not exceed 0 (single snapshot run)
     expect(usePlaybackStore.getState().cursor).toBe(0);
   });
+
+  it('degrades gracefully on an empty (failed) run — sentinel -1', () => {
+    // engine failure with 0 snapshots → store mirrors cursor -1
+    usePlaybackStore.getState().computeAndSet({
+      initialState: () => { throw new Error('boom'); },
+      step: () => null,
+    } as any, {});
+    render(<PlaybackBar />);
+    const scrubber = screen.getByRole('slider', { name: 'Step scrubber' }) as HTMLInputElement;
+    // max clamped to >= 0 → valid range input
+    expect(Number(scrubber.max)).toBe(0);
+    expect(scrubber.disabled).toBe(true);
+    // step label shows em dash, not -1/-1
+    expect(screen.getByText(/Step —/)).toBeTruthy();
+    // play must not claim playing on an empty run
+    fireEvent.click(screen.getByRole('button', { name: /play\/pause/i }));
+    expect(usePlaybackStore.getState().playing).toBe(false);
+  });
 });
 ```
 
@@ -2180,7 +2198,10 @@ export function PlaybackBar() {
   const playing = usePlaybackStore((s) => s.playing);
   const speed = usePlaybackStore((s) => s.speed);
   const run = usePlaybackStore((s) => s.run);
-  const max = run ? run.snapshots.length - 1 : 0;
+  // empty-run sentinel: engine mirrors cursor -1 for failed runs (0 snapshots);
+  // a range input with max < min is invalid HTML, so clamp and show '—'
+  const max = run ? Math.max(0, run.snapshots.length - 1) : 0;
+  const hasRun = run !== null && run.snapshots.length > 0;
 
   return (
     <div className="playback-bar" role="toolbar" aria-label="Playback">
@@ -2194,11 +2215,12 @@ export function PlaybackBar() {
       <button aria-label="Next" onClick={() => usePlaybackStore.getState().stepForward()}>⏭</button>
       <button aria-label="Reset" onClick={() => usePlaybackStore.getState().reset()}>⟲</button>
       <input
-        type="range" min={0} max={max} value={cursor}
+        type="range" min={0} max={max} value={Math.max(0, cursor)}
         aria-label="Step scrubber"
+        disabled={!hasRun}
         onChange={(e) => usePlaybackStore.getState().setCursor(Number(e.target.value))}
       />
-      <span>Step {cursor}/{max}</span>
+      <span>Step {hasRun ? `${cursor}/${max}` : '—'}</span>
       <select
         aria-label="Speed"
         value={speed}
@@ -2213,7 +2235,7 @@ export function PlaybackBar() {
 
 ```tsx
 // src/ui/ParamPanel.tsx
-import type { Params, ParamSchema } from '../engine/types';
+import type { Params, ParamSchema, ParamValue } from '../engine/types';
 import { Slider } from './Slider';
 import { Toggle } from './Toggle';
 import { Select } from './Select';
@@ -2225,14 +2247,16 @@ export function ParamPanel({ schema, values, onChange }: {
     <div className="param-panel">
       <h3>Parameters</h3>
       {schema.map((s) => {
-        const set = (v: unknown) => onChange({ ...values, [s.id]: v });
+        const set = (v: ParamValue) => onChange({ ...values, [s.id]: v });
+        // fall back to schema default when a key is missing (partial params)
+        const v = values[s.id] ?? s.default;
         switch (s.type) {
           case 'number':
-            return <Slider key={s.id} schema={s} value={values[s.id] as number} onChange={set} />;
+            return <Slider key={s.id} schema={s} value={v as number} onChange={set} />;
           case 'toggle':
-            return <Toggle key={s.id} label={s.label} value={values[s.id] as boolean} onChange={set} />;
+            return <Toggle key={s.id} label={s.label} value={v as boolean} onChange={set} />;
           case 'select':
-            return <Select key={s.id} schema={s} value={values[s.id] as string} onChange={set} />;
+            return <Select key={s.id} schema={s} value={v as string} onChange={set} />;
           default:
             return null;
         }
@@ -2326,10 +2350,12 @@ export function Latex({ tex, block = false }: { tex: string; block?: boolean }) 
     try {
       return katex.renderToString(tex, { throwOnError: false, displayMode: block });
     } catch {
-      return tex;
+      return null; // trust boundary: fall back to escaped text, never raw HTML
     }
   }, [tex, block]);
-  return <span dangerouslySetInnerHTML={{ __html: html }} aria-label={tex} />;
+  return html === null
+    ? <span aria-label={tex}>{tex}</span>
+    : <span dangerouslySetInnerHTML={{ __html: html }} aria-label={tex} />;
 }
 ```
 
@@ -2340,14 +2366,18 @@ import type { CSSProperties } from 'react';
 export function Heatmap({ dimensions }: { dimensions: [string, number][] }) {
   return (
     <div className="heatmap">
-      {dimensions.map(([label, v]) => (
-        <div key={label} className="heatmap-row">
-          <span>{label}</span>
-          <div className="heatmap-bar">
-            <div style={{ width: `${Math.max(4, v * 20)}%` } as CSSProperties} className="heatmap-fill" />
+      {dimensions.map(([label, v]) => {
+        // floor for visibility, ceiling for sanity, guard NaN
+        const width = Number.isFinite(v) ? Math.min(100, Math.max(4, v * 20)) : 4;
+        return (
+          <div key={label} className="heatmap-row">
+            <span>{label}</span>
+            <div className="heatmap-bar">
+              <div style={{ width: `${width}%` } as CSSProperties} className="heatmap-fill" />
+            </div>
           </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
