@@ -115,6 +115,34 @@ git add src/topics/multiple-linear-regression
 git commit -m "feat: multiple-linear-regression topic (full ecosystem)"
 ```
 
+> **Plan drift (Task 1):** the `matrix-animator` X → XᵀX → Xᵀy → θ story is
+> emitted in normal-equation mode only. Rationale: GD mode runs up to 2000
+> snapshots and per-step matrix payloads (X alone is n×(d+1) cells) would blow
+> up memory/scrub latency; X, XᵀX, Xᵀy are constant across epochs anyway, so
+> only θ changes. NE mode is the default and single-shot, so the full matrix
+> story is always one click away. Platform note (deferred): MatrixAnimator
+> could render a "rows×cols" caption under each matrix id.
+>
+> SHIPPED: `64f381b` (feat, 9 files, 896 lines) + `77cb641` (review nits:
+> GD-vs-NE test now uses noise 0.1 on a shared seed — non-degenerate target,
+> both methods fit identical data so agreement is exact; matrix-mode comment
+> made self-contained). Reviews: spec-compliance APPROVE WITH NITS (13/13
+> PASS; drift note above; validateParams path exercised explicitly in
+> testCases.test.ts); quality APPROVE (zero Critical/Medium; toStandard/
+> fromStandard round-trip algebra hand-verified correct — w̃ⱼ=wⱼσⱼ,
+> b̃=b+Σwⱼμⱼ; MLR-001 NAT answer w₁=2 hand-verified via XᵀX·[2,1,1]=Xᵀy;
+> contraction 0.99/epoch → machine precision at 2000 epochs; correlation
+> threshold 0.9999 unreachable by chance in 100k MC trials). Gates after
+> nits: 90/90 vitest, lint clean, build ✓, e2e 3/3.
+>
+> Implementation notes: (1) topic self-registers via `import.meta.glob` —
+> no main.tsx edit needed. (2) GD is feature-standardized (toStandard/
+> fromStandard) with bias-last design matrix, matching SLR conventions.
+> (3) `collinear` test param is intentionally not in the UI schema.
+> (4) dev-history: the round-trip once used Σw̃ⱼμⱼ (bias leaked ~0.024/epoch
+> → GD diverged to b≈−57.5) — the correct pair is Σwⱼμⱼ, now guarded by the
+> green GD test.
+
 ### Task 2: polynomial-regression
 
 **Files:** `src/topics/polynomial-regression/{...}.ts`
