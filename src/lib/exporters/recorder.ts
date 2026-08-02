@@ -1,5 +1,6 @@
 // src/lib/exporters/recorder.ts
 import type { SnapshotRun } from '../../engine/types';
+import { snapshotToPng } from './pngExporter';
 
 /**
  * Record a run as a PNG sequence (max 60 frames).
@@ -12,10 +13,11 @@ export function recordRun(
   maxFrames = 60
 ): string[] {
   const frames: string[] = [];
-  const stride = Math.max(1, Math.floor(run.snapshots.length / maxFrames));
+  const stride = Math.max(1, Math.ceil(run.snapshots.length / maxFrames));
   for (let i = 0; i < run.snapshots.length; i += stride) {
     const c = render(i);
-    if (c) frames.push(c.toDataURL('image/png'));
+    // null canvas (e.g. view not mounted) → skip frame, count reflects captured frames
+    if (c) frames.push(snapshotToPng(c));
   }
   return frames;
 }
