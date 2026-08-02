@@ -1,16 +1,30 @@
 import { describe, it, expect } from 'vitest';
 import { loadAllTopics } from '../registry/loadTopics';
 import { listTopics } from '../registry/topicRegistry';
+import { viewExists } from '../registry/viewRegistry';
+import { registerAllViews } from '../visualizers/registerViews';
 import { computeRun } from '../engine/core';
 
 // top-level await: topic modules register() during loadAllTopics, so describe
 // generation below sees the real registry (module-scope sync listTopics() would
 // be empty — the plan's original runner generated zero topic tests)
 await loadAllTopics();
+// one-time view registration — mirrors boot wiring in src/main.tsx
+registerAllViews();
 
 describe('all topic testCases', () => {
   it('registers at least the Wave-0 reference topics', () => {
     expect(listTopics().length).toBeGreaterThanOrEqual(2); // Wave 0: 2 topics
+  });
+
+  it('every topic layer view is registered', () => {
+    for (const topic of listTopics()) {
+      for (const layer of ['foundation', 'core', 'advanced'] as const) {
+        for (const v of topic.layers[layer]) {
+          expect(viewExists(v.component), `${topic.id} → ${v.component}`).toBe(true);
+        }
+      }
+    }
   });
 
   for (const topic of listTopics()) {

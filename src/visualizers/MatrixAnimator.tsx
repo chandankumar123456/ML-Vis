@@ -1,9 +1,11 @@
 // src/visualizers/MatrixAnimator.tsx
 import { useEffect, useState } from 'react';
 import { eventBus } from '../bus/eventBus';
-import type { VisualCommand } from '../engine/types';
+import type { SimState, VisualCommand } from '../engine/types';
 
-export function MatrixAnimator({ commands }: { commands: VisualCommand[] }) {
+export function MatrixAnimator({ commands, snapshot }: {
+  commands?: VisualCommand[]; snapshot?: SimState | null;
+}) {
   const [hl, setHl] = useState<string | null>(null);
 
   useEffect(() => {
@@ -14,7 +16,8 @@ export function MatrixAnimator({ commands }: { commands: VisualCommand[] }) {
     return unsub;
   }, []);
 
-  const matrices = commands.filter((c) => c.type === 'matrix') as (VisualCommand & {
+  const list = commands ?? snapshot?.visuals ?? [];
+  const matrices = list.filter((c) => c.type === 'matrix') as (VisualCommand & {
     rows: number; cols: number; cells: (number | string)[][];
   })[];
 

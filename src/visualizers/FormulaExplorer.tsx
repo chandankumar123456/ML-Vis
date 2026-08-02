@@ -1,18 +1,22 @@
 // src/visualizers/FormulaExplorer.tsx
 import { useState } from 'react';
 import { Latex } from '../ui/Latex';
-import type { Formula } from '../engine/types';
+import type { Formula, TopicModule } from '../engine/types';
 
-export function FormulaExplorer({ formulas }: { formulas: Formula[] }) {
-  const [selectedId, setSelectedId] = useState(formulas[0]?.id);
+export function FormulaExplorer({ formulas, topic }: {
+  formulas?: Formula[]; topic?: TopicModule;
+}) {
+  const list = formulas ?? topic?.formulas ?? [];
+  const [selectedId, setSelectedId] = useState(list[0]?.id);
 
-  const f = formulas.find((x) => x.id === selectedId);
+  const f = list.find((x) => x.id === selectedId);
+  if (list.length === 0) return <div className="formula-explorer">No formulas yet.</div>;
   if (!f) return null;
 
   return (
     <div className="formula-explorer">
       <div className="formula-list">
-        {formulas.map((x) => (
+        {list.map((x) => (
           <button key={x.id} className={x.id === selectedId ? 'pill active' : 'pill'}
             onClick={() => setSelectedId(x.id)}>
             {x.id}

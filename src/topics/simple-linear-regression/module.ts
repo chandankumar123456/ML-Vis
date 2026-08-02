@@ -187,6 +187,7 @@ export const slrModule: TopicModule = {
   failureDemos: [],
   mistakes: slrMistakes,
   testCases: slrTestCases,
+  lossMetricKey: 'mse',
 };
 
 export function register() {

@@ -1,5 +1,5 @@
 import type { ComponentType } from 'react';
-import type { Params, SnapshotRun, SimState } from '../engine/types';
+import type { Params, SnapshotRun, SimState, TopicModule } from '../engine/types';
 import type { BusEvent } from '../bus/eventBus';
 
 export interface ViewProps {
@@ -10,6 +10,10 @@ export interface ViewProps {
   // (matches eventBus.subscribe; ViewHost wires it up)
   subscribe?: (fn: (e: BusEvent) => void) => () => void;
   compact?: boolean;
+  // The topic module owning this view — lets topic-data visualizers
+  // (FormulaExplorer, MistakeView, QuestionPlayer, DerivationPlayer, ...)
+  // resolve their content when registered with ViewProps only.
+  topic?: TopicModule;
 }
 
 const views = new Map<string, ComponentType<ViewProps>>();

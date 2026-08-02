@@ -40,7 +40,7 @@ export function ViewHost({ topic, component, params }: {
   if (!Comp) return <div>Unknown view: {component}</div>;
   return (
     <div className="view-host">
-      <Comp run={run ?? undefined} params={params} snapshot={snapshot} subscribe={subscribe} />
+      <Comp run={run ?? undefined} params={params} snapshot={snapshot} subscribe={subscribe} topic={topic} />
     </div>
   );
 }

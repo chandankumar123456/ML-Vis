@@ -157,6 +157,7 @@ export const gdModule: TopicModule = {
   failureDemos: [],
   mistakes: gdMistakes,
   testCases: gdTestCases,
+  lossMetricKey: 'f',
 
   validateParams: (p) => {
     const issues: string[] = [];

@@ -204,6 +204,8 @@ export interface TopicModule {
   failureDemos: FailureDemo[];
   mistakes: Mistake[];
   testCases: TestCase[];
+  // metric key the topic's loss-curve view plots
+  lossMetricKey?: string;
   // lifecycle hooks
   initialize?(params: Params): void;
   dispose?(): void;

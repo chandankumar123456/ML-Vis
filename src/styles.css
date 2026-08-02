@@ -97,3 +97,10 @@ body { margin: 0; font-family: system-ui, sans-serif; background: var(--bg); col
 .kg-wrap { position: relative; }
 .kg-legend { display: flex; flex-wrap: wrap; gap: 0.75rem; margin-top: 0.5rem; font-size: 0.8rem; }
 .kg-legend i { display: inline-block; width: 12px; height: 12px; border-radius: 2px; vertical-align: middle; margin-right: 4px; }
+/* derivation player */
+.derivation-player { display: flex; flex-direction: column; gap: 0.75rem; }
+.derivation-nav { display: flex; align-items: center; gap: 0.5rem; }
+.derivation-steps { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.5rem; }
+.derivation-why { color: var(--fg); opacity: 0.8; font-size: 0.9rem; }
+/* settings (theme / palette toggles in the sidebar) */
+.settings-row { display: flex; gap: 0.5rem; align-items: center; padding: 0.5rem 1rem; }

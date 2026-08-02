@@ -2,20 +2,22 @@
 import { useState } from 'react';
 import { gradeAnswer } from '../lib/questions/engine';
 import { useAnalyticsStore } from '../store/analyticsStore';
-import type { Question } from '../engine/types';
+import type { Question, TopicModule } from '../engine/types';
 
-export function QuestionPlayer({ questions, topicId }: {
-  questions: Question[]; topicId: string;
+export function QuestionPlayer({ questions, topicId, topic }: {
+  questions?: Question[]; topicId?: string; topic?: TopicModule;
 }) {
+  const list = questions ?? topic?.questions ?? [];
+  const tid = topicId ?? topic?.id ?? '';
   const [idx, setIdx] = useState(0);
   const [answered, setAnswered] = useState<{ qid: string; correct: boolean } | null>(null);
   const [input, setInput] = useState('');
-  const q = questions[idx];
+  const q = list[idx];
 
   const submit = (answer: string | number) => {
     const g = gradeAnswer(q, answer);
     setAnswered({ qid: q.id, correct: g.correct });
-    useAnalyticsStore.getState().recordQuestion(q.id, g.correct, topicId);
+    useAnalyticsStore.getState().recordQuestion(q.id, g.correct, tid);
   };
 
   if (!q) return <div>No questions yet.</div>;
@@ -63,8 +65,8 @@ export function QuestionPlayer({ questions, topicId }: {
 
       <div className="q-nav">
         <button disabled={idx === 0} onClick={() => { setIdx(idx - 1); setAnswered(null); setInput(''); }}>← Prev</button>
-        <span>{idx + 1}/{questions.length}</span>
-        <button disabled={idx === questions.length - 1} onClick={() => { setIdx(idx + 1); setAnswered(null); setInput(''); }}>Next →</button>
+        <span>{idx + 1}/{list.length}</span>
+        <button disabled={idx === list.length - 1} onClick={() => { setIdx(idx + 1); setAnswered(null); setInput(''); }}>Next →</button>
       </div>
     </div>
   );
