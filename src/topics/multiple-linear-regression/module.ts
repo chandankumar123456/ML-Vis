@@ -226,8 +226,10 @@ function buildVisuals(data: MlrData, theta: number[]): VisualCommand[] {
 
 // Design-matrix story for matrix-animator: X → XᵀX → Xᵀy → θ, with dimension
 // compatibility visible (n×(d+1) · (d+1)×n → (d+1)×(d+1), etc.). Emitted in
-// normal-equation mode only — GD mode has thousands of snapshots and matrix payloads
-// per step would blow up memory/scrub latency (see plan drift notes).
+// normal-equation mode only (deviation from the plan spec, documented in the
+// plan's Task 1 drift note): GD mode runs up to 2000 snapshots and per-step
+// matrix payloads (X alone is n×(d+1) cells) would blow up memory and scrub
+// latency; X, XᵀX, Xᵀy are constant across epochs anyway, so only θ moves.
 function buildMatrices(data: MlrData, theta: number[]): VisualCommand[] {
   const X = designMatrix(data);
   const Xt = transpose(X);

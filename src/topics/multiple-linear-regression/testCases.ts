@@ -18,9 +18,11 @@ export const mlrTestCases: TestCase[] = [
     },
   },
   {
-    // Plan spec case 2: GD (feature-standardized, lr 0.01, 2000 epochs) ≈ normal equation optimum.
+    // Plan spec case 2: GD (feature-standardized, lr 0.01, 2000 epochs) ≈ normal equation
+    // optimum on a NON-degenerate target (noise 0.1, same seed → both methods fit the
+    // identical data, so agreement is exact even though the optimum is off-truth).
     name: 'gradient descent converges to the normal-equation optimum',
-    params: { n: 30, nFeatures: 2, noise: 0.0, useNormalEquation: false, learningRate: 0.01, epochs: 2000, seed: 42 },
+    params: { n: 30, nFeatures: 2, noise: 0.1, useNormalEquation: false, learningRate: 0.01, epochs: 2000, seed: 42 },
     maxSteps: 2001,
     expect: {
       finalMetrics: {
