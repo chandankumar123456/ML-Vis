@@ -2560,7 +2560,7 @@ git commit -m "feat: reusable UI controls (playback, params, latex, heatmap)"
 ### Task 11: Canvas renderer base + ScatterPlot + LossCurve visualizers
 
 **Files:**
-- Create: `src/lib/canvas/CanvasStage.ts`, `src/visualizers/ScatterPlot.tsx`, `src/visualizers/LossCurve.tsx`
+- Create: `src/lib/canvas/CanvasStage.ts`, `src/lib/canvas/useContainerSize.ts`, `src/visualizers/ScatterPlot.tsx`, `src/visualizers/LossCurve.tsx`
 - Test: `src/lib/canvas/CanvasStage.test.ts`
 
 - [ ] **Step 1: Write the failing test**
@@ -2576,6 +2576,13 @@ describe('fitBounds', () => {
     expect(t.scale).toBeCloseTo(6, 5);
     // world 0 → tx = (200 - 10*6)/2 = 70 ; world 10 → 70 + 60 = 130 = 200 - 70 ✓ centered
     expect(t.tx).toBeCloseTo(70, 5);
+  });
+
+  it('handles zero-range x via the || 1 guard', () => {
+    const t = fitBounds({ x: [5, 5], y: [0, 10] }, 200, 100); // default pad 40
+    // sx = 120/1 = 120, sy = 20/10 = 2 → scale 2, tx = (200 - 10*2)/2 = 90
+    expect(t.scale).toBeCloseTo(2, 5);
+    expect(t.tx).toBeCloseTo(90, 5);
   });
 });
 ```
@@ -2598,6 +2605,12 @@ export function fitBounds(b: Bounds, w: number, h: number, pad = 40): Transform 
   const tx = (w - (b.x[0] + b.x[1]) * scale) / 2;
   const ty = (h - (b.y[0] + b.y[1]) * scale) / 2;
   return { scale, tx, ty };
+}
+
+/** Resolve a CSS custom property — canvas colors cannot use var() directly. */
+export function cssVar(name: string, fallback: string): string {
+  const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  return v || fallback;
 }
 
 /** Hi-DPI canvas wrapper with pan/zoom and world→screen transform. */
@@ -2658,7 +2671,9 @@ export class CanvasStage {
     this.ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
     this.ctx.fillStyle = bg;
     this.ctx.fillRect(0, 0, w, h);
-    this.ctx.setTransform(this.dpr * this.t.scale, 0, 0, this.dpr * this.t.scale, this.dpr * this.t.tx, this.dpr * this.t.ty);
+    // draw methods apply worldToScreen() themselves — keep ctx at DPR scale only
+    // (setting the world transform here AND in draw methods double-applies it)
+    this.ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
   }
 
   drawPath(points: [number, number][], stroke: string, width: number, fill?: string) {
@@ -2708,35 +2723,53 @@ export class CanvasStage {
 
 - [ ] **Step 4: Write ScatterPlot + LossCurve visualizers**
 
-```tsx
-// src/visualizers/ScatterPlot.tsx
-import { useEffect, useRef, useState } from 'react';
-import { CanvasStage, type Bounds } from '../lib/canvas/CanvasStage';
-import { eventBus } from '../bus/eventBus';
-import type { ViewProps } from '../registry/viewRegistry';
-import type { VisualCommand } from '../engine/types';
+```ts
+// src/lib/canvas/useContainerSize.ts — shared resize-observer hook
+import { useEffect, useState } from 'react';
 
-const PALETTE = { point: '#2563eb', line: 'var(--fg)', hl: '#f59e0b' };
-
-export function ScatterPlot({ snapshot, params }: ViewProps) {
-  const ref = useRef<HTMLDivElement>(null);
-  const stageRef = useRef<CanvasStage | null>(null);
-  const highlightRef = useRef<string | null>(null);
-  const [size, setSize] = useState({ w: 600, h: 400 });
+/** Observe an element's content size; returns [ref, size]. */
+export function useContainerSize(initialW: number, initialH: number) {
+  const [size, setSize] = useState({ w: initialW, h: initialH });
+  const [ref, setRef] = useState<HTMLDivElement | null>(null);
 
   useEffect(() => {
+    if (!ref) return;
     const ro = new ResizeObserver(([entry]) => {
       const { width, height } = entry.contentRect;
       if (width > 0 && height > 0) setSize({ w: width, h: height });
     });
-    if (ref.current) ro.observe(ref.current);
+    ro.observe(ref);
     return () => ro.disconnect();
-  }, []);
+  }, [ref]);
 
+  return [ref, size] as const;
+}
+```
+
+```tsx
+// src/visualizers/ScatterPlot.tsx
+import { useEffect, useReducer, useRef } from 'react';
+import { CanvasStage, cssVar, type Bounds } from '../lib/canvas/CanvasStage';
+import { useContainerSize } from '../lib/canvas/useContainerSize';
+import { eventBus } from '../bus/eventBus';
+import type { ViewProps } from '../registry/viewRegistry';
+import type { VisualCommand } from '../engine/types';
+
+const PALETTE = { point: '#2563eb', hl: '#f59e0b' };
+
+export function ScatterPlot({ snapshot, params }: ViewProps) {
+  const [ref, size] = useContainerSize(600, 400);
+  const stageRef = useRef<CanvasStage | null>(null);
+  const highlightRef = useRef<string | null>(null);
+  const [, bump] = useReducer((x: number) => x + 1, 0);
+
+  // canvas strokes cannot use var(); resolve --fg at draw time (theme-aware)
+  // highlight events must trigger a redraw even without a new snapshot
   useEffect(() => {
     const unsub = eventBus.subscribe((e) => {
       if (e.type === 'highlight') highlightRef.current = e.payload.id;
       if (e.type === 'clear-highlights') highlightRef.current = null;
+      bump(); // highlight state changed → redraw
     });
     return unsub;
   }, []);
@@ -2782,6 +2815,7 @@ export function ScatterPlot({ snapshot, params }: ViewProps) {
     stage.setBounds(bounds, size.w, size.h);
     stage.clear(size.w, size.h, 'transparent');
 
+    const fg = cssVar('--fg', '#0f172a');
     const { visuals, highlights } = snapshot;
     for (const cmd of visuals) {
       const hl = highlights.find((h) => h.id === cmd.id);
@@ -2793,17 +2827,17 @@ export function ScatterPlot({ snapshot, params }: ViewProps) {
           break;
         }
         case 'line': {
-          stage.drawPath(cmd.points as [number, number][], (cmd.color as string) ?? PALETTE.line, isHl ? 4 : 2);
+          stage.drawPath(cmd.points as [number, number][], (cmd.color as string) ?? fg, isHl ? 4 : 2);
           break;
         }
         case 'arrow': {
           stage.drawArrow(cmd.x1 as number, cmd.y1 as number, cmd.x2 as number, cmd.y2 as number,
-            (cmd.color as string) ?? PALETTE.line);
+            (cmd.color as string) ?? fg);
           break;
         }
       }
     }
-  }, [snapshot, size, params]);
+  }, [snapshot, size, params, bump]);
 
   return <div ref={ref} style={{ width: '100%', height: 400 }} />;
 }
@@ -2830,29 +2864,23 @@ function boundsOf(cmds: VisualCommand[]): Bounds {
 
 ```tsx
 // src/visualizers/LossCurve.tsx
-import { useEffect, useRef, useState } from 'react';
-import { CanvasStage, type Bounds } from '../lib/canvas/CanvasStage';
+import { useEffect, useRef } from 'react';
+import { CanvasStage, cssVar, type Bounds } from '../lib/canvas/CanvasStage';
+import { useContainerSize } from '../lib/canvas/useContainerSize';
 import type { SnapshotRun } from '../engine/types';
 import { usePlaybackStore } from '../store/playbackStore';
 
 // IMPORTANT: registered visualizers receive ViewProps ({ run, params, snapshot, subscribe }) from ViewHost.
 // Cursor-dependent components must read `cursor` from the playback store, NOT from props (ViewHost does not pass it).
+// Intentionally NOT a ViewProps component: mounted by wrapper views (e.g.
+// registerView('loss', (p) => <LossCurve run={p.run} metricKey="cost" />)),
+// so it takes explicit props instead of ViewProps.
 export function LossCurve({ run, metricKey = 'cost' }: {
   run: SnapshotRun | null; metricKey?: string;
 }) {
-  const ref = useRef<HTMLDivElement>(null);
+  const [ref, size] = useContainerSize(600, 300);
   const stageRef = useRef<CanvasStage | null>(null);
-  const [size, setSize] = useState({ w: 600, h: 300 });
   const cursor = usePlaybackStore((s) => s.cursor);
-
-  useEffect(() => {
-    const ro = new ResizeObserver(([entry]) => {
-      const { width, height } = entry.contentRect;
-      if (width > 0) setSize({ w: width, h: height });
-    });
-    if (ref.current) ro.observe(ref.current);
-    return () => ro.disconnect();
-  }, []);
 
   useEffect(() => {
     if (!ref.current) return;
@@ -2871,9 +2899,10 @@ export function LossCurve({ run, metricKey = 'cost' }: {
     stage.setBounds(b, size.w, size.h);
     stage.clear(size.w, size.h, 'transparent');
     stage.drawPath(values.map((v, i) => [i, v] as [number, number]), '#3b82f6', 2);
+    const fg = cssVar('--fg', '#0f172a'); // canvas strokes cannot use var()
     if (cursor < run.snapshots.length) {
       const v = run.snapshots[cursor].metrics[metricKey];
-      if (Number.isFinite(v)) stage.drawCircle(cursor, v, 6, '#f59e0b', 'var(--fg)');
+      if (Number.isFinite(v)) stage.drawCircle(cursor, v, 6, '#f59e0b', fg);
     }
   }, [run, cursor, metricKey, size]);
 
