@@ -5,11 +5,12 @@
 // paints it as ImageData, then upscales onto the visible canvas with drawImage.
 // Overlays: a solid decision line, optional dashed margin lines parallel to it,
 // and optional highlighted support vectors (used by later SVM topics).
-import { useEffect, useRef } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { useContainerSize } from '../lib/canvas/useContainerSize';
 import { cssVar, fitBounds, type Bounds } from '../lib/canvas/CanvasStage';
 import { getClassifier, type Classifier } from '../registry/viewRegistry';
-import type { Params, SimState, TopicModule, VisualCommand } from '../engine/types';
+import { boundsOfVisuals, safeClassify } from './bounds';
+import type { Params, SimState, TopicModule } from '../engine/types';
 
 // Offscreen lattice resolution: GRID² classifier calls per redraw, then one
 // drawImage upscale — keeps per-frame cost constant regardless of canvas size.
@@ -48,19 +49,56 @@ export function DecisionBoundary({ snapshot, params, topic, supportVectors, marg
   const classifier = getClassifier(topic?.id ?? '');
   const hasClassifier = classifier !== undefined;
 
-  // Resolve + paint whenever the snapshot (step), params, classifier or
-  // overlays change. The classifier receives the CURRENT topic params with the
-  // snapshot's algorithm state merged in, so classification reflects the step
-  // the viewer is scrubbing to.
+  // Merge the topic params with the snapshot's algorithm state ONCE per
+  // snapshot, reusing the exact same object for every grid cell and overlay
+  // probe — topic classifiers may cache fit state keyed on the params reference
+  // (e.g. naive-bayes), so rebuilding it per cell would miss that cache every
+  // call. Only a new snapshot or changed params produce a new object.
+  const effParams = useMemo(
+    () => (snapshot ? { ...params, ...snapshot.algorithm } : params),
+    [snapshot, params]
+  );
+
+  // World-space domain shared by the grid lattice and the overlay transform.
+  const bounds = useMemo(() => resolveBounds(snapshot), [snapshot]);
+
+  // Classify the whole GRID×GRID lattice once per (snapshot, classifier,
+  // merged params): scrubbing or panel re-renders reuse the cached grid instead
+  // of recomputing 2500 classifications per frame. Invalidates only when the
+  // displayed snapshot, the registered classifier, or the merged params change.
+  const grid = useMemo(() => {
+    if (!classifier) return null;
+    const [x0, x1] = bounds.x;
+    const [y0, y1] = bounds.y;
+    const cells = new Float64Array(GRID * GRID);
+    for (let iy = 0; iy < GRID; iy++) {
+      // cell centers — never sample exactly on the domain edge
+      const y = y0 + ((iy + 0.5) / GRID) * (y1 - y0);
+      for (let ix = 0; ix < GRID; ix++) {
+        const x = x0 + ((ix + 0.5) / GRID) * (x1 - x0);
+        cells[iy * GRID + ix] = safeClassify(classifier, x, y, effParams);
+      }
+    }
+    return cells;
+  }, [snapshot, classifier, effParams]);
+
+  // Paint whenever the snapshot, params, classifier, overlays or size change.
+  // The grid is memoized above, so re-paints (e.g. panel re-renders, resize)
+  // reuse the cached classifications instead of re-running the classifier per
+  // cell. The classifier receives the CURRENT topic params with the snapshot's
+  // algorithm state merged in, so classification reflects the step the viewer
+  // is scrubbing to.
   useEffect(() => {
     const host = hostRef.current;
-    if (!host || !classifier) return;
+    if (!host || !classifier || !grid) return;
     const dpr = window.devicePixelRatio || 1;
     let canvas = canvasRef.current?.host === host ? canvasRef.current.canvas : null;
     if (canvas === null) {
       const created = document.createElement('canvas');
       created.className = 'decision-canvas';
       created.setAttribute('data-decision-grid', String(GRID));
+      created.setAttribute('aria-label',
+        'decision boundary classification grid: 50 × 50 sampled class regions');
       created.style.display = 'block';
       host.replaceChildren(created);
       canvasRef.current = { host, canvas: created };
@@ -72,8 +110,8 @@ export function DecisionBoundary({ snapshot, params, topic, supportVectors, marg
     canvas.style.height = `${size.h}px`;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
-    draw(ctx, classifier, snapshot, params, supportVectors, marginLines, size);
-  }, [snapshot, params, size, classifier, supportVectors, marginLines]);
+    draw(ctx, classifier, bounds, effParams, grid, supportVectors, marginLines, size);
+  }, [snapshot, params, size, classifier, bounds, effParams, grid, supportVectors, marginLines]);
 
   if (!hasClassifier) {
     return (
@@ -90,14 +128,12 @@ export function DecisionBoundary({ snapshot, params, topic, supportVectors, marg
   );
 }
 
-function draw(ctx: CanvasRenderingContext2D, classifier: Classifier,
-  snapshot: SimState | null | undefined, params: Params,
+function draw(ctx: CanvasRenderingContext2D, classifier: Classifier, bounds: Bounds,
+  effParams: Params, grid: Float64Array,
   supportVectors: [number, number][] | undefined,
   marginLines: { offset: number }[] | undefined,
   size: { w: number; h: number }): void {
   const dpr = window.devicePixelRatio || 1;
-  const bounds = resolveBounds(snapshot);
-  const effParams = snapshot ? { ...params, ...snapshot.algorithm } : params;
   const [x0, x1] = bounds.x;
   const [y0, y1] = bounds.y;
 
@@ -112,11 +148,8 @@ function draw(ctx: CanvasRenderingContext2D, classifier: Classifier,
   const img = new ImageData(GRID, GRID);
   const palette = resolvePalette();
   for (let iy = 0; iy < GRID; iy++) {
-    // cell centers — never sample exactly on the domain edge
-    const y = y0 + ((iy + 0.5) / GRID) * (y1 - y0);
     for (let ix = 0; ix < GRID; ix++) {
-      const x = x0 + ((ix + 0.5) / GRID) * (x1 - x0);
-      const cls = classifier(x, y, effParams);
+      const cls = grid[iy * GRID + ix];
       const [r, g, b] = classColor(palette, cls);
       const o = (iy * GRID + ix) * 4;
       img.data[o] = r;
@@ -126,7 +159,11 @@ function draw(ctx: CanvasRenderingContext2D, classifier: Classifier,
     }
   }
   offCtx.putImageData(img, 0, 0);
+  // Nearest-neighbor upscale: with smoothing left on, the GRID² region image
+  // blurs into gradients between adjacent class cells.
+  ctx.imageSmoothingEnabled = false;
   ctx.drawImage(off, 0, 0, GRID, GRID, 0, 0, size.w * dpr, size.h * dpr);
+  ctx.imageSmoothingEnabled = true;
 
   // ---- overlays in CSS-pixel space (padded transform, like ScatterPlot) ----
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -176,33 +213,15 @@ function drawLine(ctx: CanvasRenderingContext2D, x1: number, y1: number, x2: num
 }
 
 // ---- domain inference ----
-// Follow ScatterPlot's convention: fit the visible data (points/lines/arrows)
-// with the same 10% + 0.5 padding, so class regions align with the data on the
-// shared world-space convention; fall back to DEFAULT_DOMAIN when the snapshot
-// has nothing plottable. Kept consistent with scatter-plot by design.
+// Follow ScatterPlot's convention: fit the visible data (points/lines/arrows/
+// circles) with the same 10% + 0.5 padding, so class regions align with the
+// data on the shared world-space convention; fall back to DEFAULT_DOMAIN when
+// the snapshot has nothing plottable. Bounds fitting lives in ./bounds
+// (boundsOfVisuals) — shared with the regression tests and unit-testable
+// without a DOM. Kept consistent with scatter-plot by design.
 function resolveBounds(snapshot: SimState | null | undefined): Bounds {
   const b = snapshot ? boundsOfVisuals(snapshot.visuals) : null;
   return b ?? DEFAULT_DOMAIN;
-}
-
-function boundsOfVisuals(cmds: VisualCommand[]): Bounds | null {
-  // mirrors ScatterPlot.boundsOf
-  let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
-  const touch = (x: number, y: number) => {
-    if (!Number.isFinite(x) || !Number.isFinite(y)) return;
-    x0 = Math.min(x0, x); x1 = Math.max(x1, x);
-    y0 = Math.min(y0, y); y1 = Math.max(y1, y);
-  };
-  for (const c of cmds) {
-    if (c.type === 'point') touch(c.x as number, c.y as number);
-    if (c.type === 'line' && Array.isArray(c.points)) {
-      for (const [x, y] of c.points as [number, number][]) touch(x, y);
-    }
-    if (c.type === 'arrow') { touch(c.x1 as number, c.y1 as number); touch(c.x2 as number, c.y2 as number); }
-  }
-  if (!Number.isFinite(x0)) return null;
-  const padX = (x1 - x0) * 0.1 + 0.5, padY = (y1 - y0) * 0.1 + 0.5;
-  return { x: [x0 - padX, x1 + padX], y: [y0 - padY, y1 + padY] };
 }
 
 // ---- class colors ----
@@ -258,9 +277,9 @@ function boundaryPoint(classifier: Classifier, bounds: Bounds, params: Params): 
   const cx = (x0 + x1) / 2;
   const cy = (y0 + y1) / 2;
   const STEPS = 101;
-  const tH = scanCrossing((t: number) => classifier(x0 + (x1 - x0) * t, cy, params), STEPS);
+  const tH = scanCrossing((t: number) => safeClassify(classifier, x0 + (x1 - x0) * t, cy, params), STEPS);
   if (tH !== null) return [x0 + (x1 - x0) * tH, cy];
-  const tV = scanCrossing((t: number) => classifier(cx, y0 + (y1 - y0) * t, params), STEPS);
+  const tV = scanCrossing((t: number) => safeClassify(classifier, cx, y0 + (y1 - y0) * t, params), STEPS);
   if (tV !== null) return [cx, y0 + (y1 - y0) * tV];
   return null;
 }
@@ -283,8 +302,8 @@ function boundaryNormal(classifier: Classifier, p: [number, number], bounds: Bou
   const [x0, x1] = bounds.x;
   const [y0, y1] = bounds.y;
   const eps = Math.max(x1 - x0, y1 - y0) * 1e-2;
-  const gx = classifier(p[0] + eps, p[1], params) - classifier(p[0] - eps, p[1], params);
-  const gy = classifier(p[0], p[1] + eps, params) - classifier(p[0], p[1] - eps, params);
+  const gx = safeClassify(classifier, p[0] + eps, p[1], params) - safeClassify(classifier, p[0] - eps, p[1], params);
+  const gy = safeClassify(classifier, p[0], p[1] + eps, params) - safeClassify(classifier, p[0], p[1] - eps, params);
   const len = Math.hypot(gx, gy);
   if (!Number.isFinite(len) || len < 1e-12) return null;
   return [gx / len, gy / len];
