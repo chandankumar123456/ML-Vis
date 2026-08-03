@@ -2,7 +2,8 @@
 import type { TestCase } from '../../engine/types';
 
 // Empirical anchors (seed 42, nPerClass 12, margin 1.0, spread 1.5, grid 31):
-//   regions: k=1 → 51, k=3 → 44, k=15 → 35   (monotone decrease — boundary smoothing)
+//   regions: k=1 → 51, k=3 → 44, k=15 → 35   (falls overall — boundary smoothing;
+//   finite-sample wobbles, not a strict monotone)
 //   trainError: k=1 → 0 (memorization), k=15 → 0.208
 //   LOO error: k=1 → 0.417, k=15 → 0.208
 // Tie-break craft (balanced 2+2): query (0,0), k=2, points [[1,0,1],[-1,0,0],[2,0,1],[0,2,0]] —

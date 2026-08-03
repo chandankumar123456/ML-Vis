@@ -246,7 +246,7 @@ function nearestHighlights(nbs: Neighbor[], first: boolean): SimState['highlight
   return hl;
 }
 
-function snapshotAt(p: Params, points: KnnPoint[], k: number, first: boolean): SimState {
+function snapshotAt(p: Params, points: KnnPoint[], k: number, first: boolean, prev?: SimState): SimState {
   const metric = metricOf(p);
   const qx = (p.queryX as number) ?? 0;
   const qy = (p.queryY as number) ?? 0;
@@ -256,6 +256,18 @@ function snapshotAt(p: Params, points: KnnPoint[], k: number, first: boolean): S
   const qClass = knnClassify(points, qx, qy, k, metric);
   const nbs = nearestBy(points, qx, qy, k, metric);
   const kthDist = nbs.length > 0 ? nbs[nbs.length - 1].d : NaN;
+
+  // What visibly changed this step vs the previous snapshot: k always changes,
+  // but the metrics move independently (LOO error wobbles on small n), so list
+  // a metric only when it actually differs from the previous snapshot.
+  const changed: string[] = [];
+  if (!first) {
+    changed.push(`k → ${k}`);
+    const pm = prev?.metrics;
+    if (pm?.trainError !== train) changed.push(`train error → ${train.toFixed(3)}`);
+    if (pm?.error !== loo) changed.push(`LOO error → ${loo.toFixed(3)}`);
+    if (pm?.regions !== regions) changed.push(`regions → ${regions}`);
+  }
 
   const math: MathStep[] = [
     { latex: 'd(p, q) = \\sqrt{(p_1 - q_1)^2 + (p_2 - q_2)^2}', id: 'knn-euclidean' },
@@ -269,10 +281,10 @@ function snapshotAt(p: Params, points: KnnPoint[], k: number, first: boolean): S
     narration: `k = ${k} (${metric}): train error = ${train.toFixed(3)}, LOO error = ${loo.toFixed(3)}, ` +
       `regions = ${regions}, query (${qx.toFixed(1)}, ${qy.toFixed(1)}) → class ${qClass}, k-th neighbor at d = ${Number.isFinite(kthDist) ? kthDist.toFixed(2) : '—'}`,
     explanation: {
-      changed: first ? [] : [`k → ${k}`, `train error → ${train.toFixed(3)}`, `LOO error → ${loo.toFixed(3)}`, `regions → ${regions}`],
+      changed,
       why: first
         ? `k = 1 (${metric}): overfit signature — train error = ${train.toFixed(3)} (memorization: each point is its own nearest neighbor) while LOO error = ${loo.toFixed(3)} sits at the high end of the honest curve. regions = ${regions}`
-        : `k = ${k} (${metric}): the vote widens — train error ${train.toFixed(3)} rises from 0 (memorization fades) as LOO error ${loo.toFixed(3)} falls from its k=1 high (≈ 0.42 on the default seed); past k ≈ n/2 = ${(points.length / 2).toFixed(0)} the majority vote saturates and the honest error stops improving (both curves sit ≈ 0.21 at k = 15–18, then LOO creeps back up at k = 19–20). regions = ${regions}`,
+        : `k = ${k} (${metric}): the vote widens — train error ${train.toFixed(3)} (trending up from 0 as memorization fades) vs LOO error ${loo.toFixed(3)} (trending down from its k=1 high of ≈ 0.42 on the default seed). On a small dataset both curves wobble rather than move monotonically, and past k ≈ n/2 = ${(points.length / 2).toFixed(0)} the majority vote saturates: the curves coincide at ≈ 0.21 (k = 15/16/18) and LOO creeps back up at k = 19–20. regions = ${regions}`,
       formulaRef: 'knn-majority-vote',
       dependsOn: ['distance-metrics', 'majority-vote'],
       gateConcepts: ['k-NN', 'nearest-neighbor', metric === 'manhattan' ? 'L1 distance' : 'L2 distance'],
@@ -302,7 +314,7 @@ export const simulation = {
     const current = (s.algorithm.k as number) ?? 1;
     const next = current + 1;
     if (next > target) return null; // sweep complete
-    return snapshotAt(p, points, next, false);
+    return snapshotAt(p, points, next, false, s);
   },
 };
 
