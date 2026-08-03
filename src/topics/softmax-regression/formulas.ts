@@ -1,0 +1,102 @@
+// src/topics/softmax-regression/formulas.ts
+import type { Formula } from '../../engine/types';
+
+export const softmaxFormulas: Formula[] = [
+  {
+    id: 'softmax-def',
+    latex: '\\hat{y}_k = \\frac{e^{z_k}}{\\sum_{j=1}^{K} e^{z_j}}, \\qquad z_k = w_k \\cdot x + b_k',
+    symbols: [
+      { symbol: 'z_k', meaning: 'logit (score) of class k — a linear function of the features', dimensions: 'real' },
+      { symbol: 'w_k', meaning: 'weight VECTOR of class k — the k-th row of W (K × d)', dimensions: 'd weights per class' },
+      { symbol: 'b_k', meaning: 'per-class bias of class k (K biases, one per class)', dimensions: 'real' },
+      { symbol: '\\hat{y}_k', meaning: 'predicted probability of class k — ∈ (0, 1), sums to 1 over k', dimensions: 'probability' },
+      { symbol: 'K', meaning: 'number of classes (3 in this topic)', dimensions: '3' },
+    ],
+    assumptions: ['Class probabilities are mutually exclusive and exhaustive: Σ ŷ_k = 1'],
+    failureCases: ['Logits so large that e^{z_k} overflows to Infinity (fix: max-shift)', 'K = 1 degenerates to a constant 1'],
+    derivesFrom: ['logistic-regression', 'cross-entropy-loss'],
+    connections: ['Decision boundary (argmax)', 'One-hot encoding', 'Neural network output layer'],
+    whyWorks: 'Exponentiation maps scores to positive numbers monotonically (argmax preserved) and the denominator normalizes them into a probability simplex — a differentiable, "soft" version of the argmax.',
+  },
+  {
+    id: 'softmax-stable',
+    latex: '\\hat{y}_k = \\frac{e^{z_k - m}}{\\sum_{j=1}^{K} e^{z_j - m}}, \\qquad m = \\max_j z_j',
+    symbols: [
+      { symbol: 'm', meaning: 'max logit — the shift; subtracting it keeps every exponent ≤ 0', dimensions: 'real' },
+      { symbol: 'e^{z_k - m}', meaning: 'shifted exponent — bounded in (0, 1], never overflows', dimensions: 'positive' },
+    ],
+    assumptions: ['None — the identity holds for ANY constant shift m (shift invariance)'],
+    failureCases: ['Naive softmax (no shift) with z = [1000, 1001, 1002] → e^{1002} = Infinity → NaN probabilities'],
+    derivesFrom: ['softmax-def'],
+    connections: ['Log-sum-exp', 'Numerical stability'],
+    whyWorks: 'Multiply numerator and denominator by e^{−m}: e^{z_k}/Σe^{z_j} = e^{z_k−m}/Σe^{z_j−m}. The max-shift version computes the SAME probabilities but every exponent passed to exp is ≤ 0, so exp can never overflow — the classic trap topic.',
+  },
+  {
+    id: 'log-sum-exp',
+    latex: '\\log \\sum_{j=1}^{K} e^{z_j} = m + \\log \\sum_{j=1}^{K} e^{z_j - m}, \\qquad m = \\max_j z_j',
+    symbols: [
+      { symbol: '\\log \\sum e^{z_j}', meaning: 'the log-sum-exp (LSE) function — the log of the softmax denominator', dimensions: 'real' },
+      { symbol: 'm', meaning: 'max logit; the shift keeps the term inside log near O(1)', dimensions: 'real' },
+    ],
+    assumptions: ['Logits finite'],
+    failureCases: ['Computing log(Σe^{z_j}) directly overflows for large logits and underflows to log(0) for very negative ones'],
+    derivesFrom: ['softmax-stable'],
+    connections: ['Categorical cross-entropy', 'Log-likelihood'],
+    whyWorks: 'Same shift-invariance trick as the stable softmax: pull the max out of the exponent so the residual sum is in [1, K] and log stays well-conditioned.',
+  },
+  {
+    id: 'categorical-ce',
+    latex: 'L = -\\frac{1}{n} \\sum_{i=1}^{n} \\sum_{k=1}^{K} 1\\{y_i = k\\} \\log \\hat{y}_{ik} = -\\frac{1}{n} \\sum_i \\log \\hat{y}_{i, y_i}',
+    symbols: [
+      { symbol: 'y_i', meaning: 'true class of point i (one-hot: only the true class contributes)', dimensions: '0..K−1' },
+      { symbol: '1\\{y_i = k\\}', meaning: 'indicator — 1 iff point i belongs to class k (the one-hot selector)', dimensions: '0 or 1' },
+      { symbol: '\\hat{y}_{ik}', meaning: 'predicted probability of class k for point i', dimensions: 'probability' },
+      { symbol: 'L', meaning: 'mean categorical cross-entropy over the n training points', dimensions: 'nats' },
+    ],
+    assumptions: ['Prediction is stochastic: ŷ is a probability vector, not a hard label'],
+    failureCases: ['log(0) → −∞ when a confident wrong prediction has ŷ = 0 (clip to 1e-12)', 'Class imbalance biases L toward the majority class'],
+    derivesFrom: ['softmax-def', 'cross-entropy-loss'],
+    connections: ['MLE (minimizing CE = maximizing likelihood)', 'KL divergence'],
+    whyWorks: 'Each point pays −log(ŷ_true): a small penalty for confident correct predictions, a huge one for confident mistakes — the smooth surrogate for the 0-1 loss that gradient descent can optimize.',
+  },
+  {
+    id: 'softmax-gradient',
+    latex: '\\frac{\\partial L}{\\partial w_k} = \\frac{1}{n} \\sum_{i=1}^{n} \\left(\\hat{y}_{ik} - 1\\{y_i = k\\}\\right) x_i, \\qquad \\frac{\\partial L}{\\partial b_k} = \\frac{1}{n} \\sum_i \\left(\\hat{y}_{ik} - 1\\{y_i = k\\}\\right)',
+    symbols: [
+      { symbol: '\\hat{y}_{ik} - 1\\{y_i = k\\}', meaning: 'the softmax error: prediction minus one-hot truth — the ŷ − indicator result', dimensions: 'residual' },
+      { symbol: 'x_i', meaning: 'feature vector of point i (d × 1)', dimensions: 'd features' },
+      { symbol: 'w_k', meaning: 'weight vector of class k — updated by its own error term only', dimensions: 'd weights' },
+    ],
+    assumptions: ['L is the MEAN CE (hence the 1/n)', 'Softmax outputs are strictly positive (exp > 0)'],
+    failureCases: ['Forgetting the 1{y = k} term — the gradient then pushes every class probability up'],
+    derivesFrom: ['categorical-ce', 'softmax-def'],
+    connections: ['Gradient descent', 'Backpropagation (last layer)'],
+    whyWorks: 'By the chain rule, ∂L/∂z_k = ŷ_k − 1{y=k}; then ∂L/∂w_k = Σ (∂L/∂z_k)·x. Each class weight is pulled toward the points it should own (see derivations.ts for the full chain-rule walk).',
+  },
+  {
+    id: 'softmax-argmax',
+    latex: '\\hat{y} = \\arg\\max_k \\left( w_k \\cdot x + b_k \\right)',
+    symbols: [
+      { symbol: '\\hat{y}', meaning: 'predicted class — the class with the largest logit (equivalently largest probability)', dimensions: '0..K−1' },
+      { symbol: '\\arg\\max_k', meaning: 'index of the maximum — the "hard" decision on top of the "soft" probabilities', dimensions: 'index' },
+    ],
+    assumptions: ['Decision region between classes k and j is the line z_k = z_j (linear boundary)'],
+    failureCases: ['Tied logits → argmax picks the first index (an arbitrary tie-break)'],
+    derivesFrom: ['softmax-def'],
+    connections: ['Decision boundary view', 'Confusion matrix'],
+    whyWorks: 'exp is strictly monotone, so the largest logit has the largest probability: ranking by z is identical to ranking by ŷ — the decision boundary is linear where z_k = z_j.',
+  },
+  {
+    id: 'softmax-sigmoid',
+    latex: '\\hat{y}_1 = \\frac{e^{z_1}}{e^{z_0} + e^{z_1}} = \\frac{1}{1 + e^{-(z_1 - z_0)}} = \\sigma(z_1 - z_0)',
+    symbols: [
+      { symbol: 'z_1 - z_0', meaning: 'logit DIFFERENCE — only this matters when K = 2 (the shared shift cancels)', dimensions: 'real' },
+      { symbol: '\\sigma', meaning: 'logistic sigmoid — softmax with 2 classes is exactly the sigmoid of the difference', dimensions: '0..1' },
+    ],
+    assumptions: ['K = 2'],
+    failureCases: ['Treating softmax with K = 2 as two independent sigmoids (they would double-count probability)'],
+    derivesFrom: ['softmax-def', 'logistic-regression'],
+    connections: ['Sigmoid', 'One-vs-rest'],
+    whyWorks: 'Factor e^{z_0}: the two-class softmax is 1/(1 + e^{z_0−z_1}) = σ(z_1 − z_0). Softmax GENERALIZES logistic regression to K classes; logistic is the K = 2 special case.',
+  },
+];
