@@ -4,8 +4,8 @@
 // Design decisions (deviations from the plan documented in the report):
 //  - Step model: K-SWEEP mirroring ridge's λ-sweep EXACTLY — one snapshot per k on
 //    [1, 2, …, params.k], last snapshot exactly the slider's k. Scrubbing the run IS
-//    the boundary-smoothing animation (region count falls as k rises) + the growing
-//    distance rings around the query point.
+//    the boundary-smoothing animation (region count falls over the mid range as k rises)
+//    + the growing distance rings around the query point.
 //  - 'error' metric = LEAVE-ONE-OUT error per k (honest: k=1 is NOT zero under LOO,
 //    unlike train error — the "k=1 overfits" story). 'trainError' = self-classification
 //    error (k=1 → exactly 0: each point is its own nearest neighbor).
@@ -90,6 +90,35 @@ export function generatePoints(p: Params): KnnPoint[] {
   return pts;
 }
 
+// --- Point-set memoization ----------------------------------------------
+// DecisionBoundary resolves the classifier 2500× per snapshot (50×50 grid); before this
+// cache every call re-ran the O(n) generation. getPoints() is now the SINGLE source of
+// truth: initialState, step and the classifier all reach the SAME cached array for a
+// given params key. The key captures every input that changes the set — seed, nPerClass,
+// margin and the optional `points` JSON override (a drag/click edit changes the JSON
+// string, so the key changes and the cache invalidates naturally). Deterministic:
+// same key → same array instance.
+const POINTS_CACHE = new Map<string, KnnPoint[]>();
+const POINTS_CACHE_MAX = 64;
+
+function pointsCacheKey(p: Params): string {
+  const custom = p.points;
+  if (typeof custom === 'string' && custom.trim() !== '') return `points:${custom}`;
+  return `seed:${(p.seed as number) ?? 42}|nPerClass:${(p.nPerClass as number) ?? 12}|margin:${(p.margin as number) ?? 1.0}`;
+}
+
+/** Cached generatePoints — same params key ⇒ same array (never mutated). */
+export function getPoints(p: Params): KnnPoint[] {
+  const key = pointsCacheKey(p);
+  let pts = POINTS_CACHE.get(key);
+  if (!pts) {
+    pts = generatePoints(p);
+    if (POINTS_CACHE.size >= POINTS_CACHE_MAX) POINTS_CACHE.clear(); // bounded memory
+    POINTS_CACHE.set(key, pts);
+  }
+  return pts;
+}
+
 /** Distance between a stored point and a query (Euclidean or Manhattan). */
 export function distance(pt: KnnPoint, qx: number, qy: number, metric: KnnMetric): number {
   const dx = pt.x - qx;
@@ -159,8 +188,9 @@ export function looErrorOf(points: KnnPoint[], k: number, metric: KnnMetric): nu
 
 /**
  * Decision-region complexity: classify a G×G grid over [−5,5]² and count adjacent label
- * transitions (horizontal + vertical). Deterministic; strictly decreases as k smooths
- * the boundary (51 → 35 on the default seed at k=1 vs k=15).
+ * transitions (horizontal + vertical). Deterministic; falls OVERALL as k smooths the
+ * boundary (51 → 35 on the default seed at k=1 vs k=15) — a trend, not a strict monotone
+ * (finite-sample wobbles, and the vote saturates past k ≈ n/2).
  */
 export function regionCount(points: KnnPoint[], k: number, metric: KnnMetric, G = 31): number {
   let changes = 0;
@@ -239,10 +269,10 @@ function snapshotAt(p: Params, points: KnnPoint[], k: number, first: boolean): S
     narration: `k = ${k} (${metric}): train error = ${train.toFixed(3)}, LOO error = ${loo.toFixed(3)}, ` +
       `regions = ${regions}, query (${qx.toFixed(1)}, ${qy.toFixed(1)}) → class ${qClass}, k-th neighbor at d = ${Number.isFinite(kthDist) ? kthDist.toFixed(2) : '—'}`,
     explanation: {
-      changed: first ? [] : [`k → ${k}`, `regions → ${regions}`, `LOO error → ${loo.toFixed(3)}`],
+      changed: first ? [] : [`k → ${k}`, `train error → ${train.toFixed(3)}`, `LOO error → ${loo.toFixed(3)}`, `regions → ${regions}`],
       why: first
-        ? 'k = 1: the query takes the label of its single nearest neighbor — the most overfit (noisiest) boundary, zero train error'
-        : `k = ${k}: the boundary smooths as the vote widens — region count ${regions}, LOO error ${loo.toFixed(3)} (${metric} metric)`,
+        ? `k = 1 (${metric}): overfit signature — train error = ${train.toFixed(3)} (memorization: each point is its own nearest neighbor) while LOO error = ${loo.toFixed(3)} sits at the high end of the honest curve. regions = ${regions}`
+        : `k = ${k} (${metric}): the vote widens — train error ${train.toFixed(3)} rises from 0 (memorization fades) as LOO error ${loo.toFixed(3)} falls from its k=1 high (≈ 0.42 on the default seed); past k ≈ n/2 = ${(points.length / 2).toFixed(0)} the majority vote saturates and the honest error stops improving (both curves sit ≈ 0.21 at k = 15–18, then LOO creeps back up at k = 19–20). regions = ${regions}`,
       formulaRef: 'knn-majority-vote',
       dependsOn: ['distance-metrics', 'majority-vote'],
       gateConcepts: ['k-NN', 'nearest-neighbor', metric === 'manhattan' ? 'L1 distance' : 'L2 distance'],
@@ -262,12 +292,12 @@ export const simulation = {
    * learner — no training epochs to step through).
    */
   initialState: (p: Params): SimState => {
-    const points = generatePoints(p);
+    const points = getPoints(p);
     return snapshotAt(p, points, 1, true);
   },
 
   step: (p: Params, s: SimState): SimState | null => {
-    const points = generatePoints(p);
+    const points = getPoints(p);
     const target = kOf(p);
     const current = (s.algorithm.k as number) ?? 1;
     const next = current + 1;
@@ -369,9 +399,11 @@ export const knnModule: TopicModule = {
 export function register() {
   registerTopic(knnModule);
   // Deterministic per params (seeded generation or points override): DecisionBoundary
-  // resolves this classifier via getClassifier('knn') to paint the region grid.
+  // resolves this classifier via getClassifier('knn') to paint the region grid (2500
+  // calls per snapshot — getPoints() serves the cached point set so only the FIRST call
+  // per snapshot pays the O(n) generation cost).
   registerClassifier('knn', (x, y, params) => {
-    const points = generatePoints(params);
+    const points = getPoints(params);
     return knnClassify(points, x, y, kOf(params), metricOf(params));
   });
 }

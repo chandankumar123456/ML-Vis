@@ -30,7 +30,7 @@ export const knnMistakes: Mistake[] = [
     id: 'knn-k1-best',
     pattern: 'Choosing k by minimizing TRAIN error (which always picks k=1)',
     example: 'E_{\\text{train}}(k{=}1) = 0 \\;\\text{(each point is its own neighbor)}\\; \\Rightarrow \\; \\text{k=1 "wins"}',
-    whyWrong: 'k=1 scores 0 train error by construction (self-neighbor), so train error is useless for selecting k — it always says "k=1". The honest curve is validation/leave-one-out error, which has a minimum at an intermediate k and rises again when k gets too large.',
+    whyWrong: 'k=1 scores 0 train error by construction (self-neighbor), so train error is useless for selecting k — it always says "k=1". The honest curve is validation/leave-one-out error: it starts high (≈0.42 at k=1 on the default seed) and drops quickly as k grows, bottoming out around 0.21 at intermediate k. On a small dataset the LOO estimate is noisy — it oscillates between ≈0.21 and ≈0.38 on this seed rather than descending monotonically — and once k passes half the dataset the vote saturates toward the class majority: past that point increasing k stops improving the honest error (on the default seed it even creeps back up at k=19–20). Train error cannot select k; LOO at least identifies the working range.',
     gateTrap: true,
     relatedConcept: 'knn-loo-error',
   },

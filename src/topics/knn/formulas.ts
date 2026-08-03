@@ -52,7 +52,7 @@ export const knnFormulas: Formula[] = [
       { symbol: 'k', meaning: 'neighborhood size — the smoothing dial', dimensions: 'positive integer' },
     ],
     assumptions: ['Ties broken deterministically: nearest-of-tied (smallest distance inside the k-set wins; equal distance → lower class index)'],
-    failureCases: ['k = 1: overfits noise (a single outlier flips the vote)', 'k too large: the boundary becomes the global majority — underfits local structure', 'Even k with 2 classes → ties are common; odd k removes them only for 2 classes, not for 3+'],
+    failureCases: ['k = 1: overfits noise (a single outlier flips the vote)', 'k → n: the boundary collapses toward the global majority — underfits local structure (past k ≈ n/2 the vote saturates and the honest error stops improving)', 'Even k with 2 classes → ties are common; odd k removes them only for 2 classes, not for 3+'],
     derivesFrom: [],
     connections: ['Decision boundary', 'Voronoi diagram', 'Bias–variance tradeoff'],
     whyWorks: 'The vote is an empirical estimate of the posterior P(class | neighborhood): the most frequent class among the k nearest points. Small k → low bias / high variance; large k → high bias / low variance — the smoothing knob.',
@@ -69,7 +69,7 @@ export const knnFormulas: Formula[] = [
     failureCases: ['LOO is expensive (n refits — O(n²·d) for k-NN)', 'High-variance estimate on small n'],
     derivesFrom: ['knn-majority-vote'],
     connections: ['Cross-validation', 'Bias–variance tradeoff'],
-    whyWorks: 'Train error is a lie for k-NN (k=1 always scores 0 — every point is its own nearest neighbor). LOO excludes the point being predicted, so k=1 can already be wrong: it is the honest error-vs-k curve.',
+    whyWorks: 'Train error is a lie for k-NN (k=1 always scores 0 — every point is its own nearest neighbor). LOO excludes the point being predicted, so k=1 can already be wrong (≈0.42 on the default seed, falling to ≈0.21 at k=15): it is the honest error-vs-k curve, and it stops improving once k passes n/2 and the vote saturates.',
   },
   {
     id: 'knn-complexity',

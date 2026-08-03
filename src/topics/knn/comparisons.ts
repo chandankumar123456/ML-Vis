@@ -63,7 +63,7 @@ export const knnComparisons: Comparison[] = [
       {
         axis: 'k / depth = complexity dial',
         entries: [
-          { topic: 'knn', value: 'k small → overfit; k large → smooth (bias–variance via k)' },
+          { topic: 'knn', value: 'k small → overfit; k large → smooth (bias–variance via k; past k ≈ n/2 the majority vote saturates)' },
           { topic: 'decision-tree', value: 'Depth small → underfit; depth large → overfit (pruning needed)' },
         ],
       },

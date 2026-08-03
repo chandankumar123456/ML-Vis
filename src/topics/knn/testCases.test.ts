@@ -56,6 +56,8 @@ describe('knn testCases', () => {
 
   // The engine sandbox does NOT call validateParams (the UI does before a run) — so the
   // plan spec demands explicit tests of the validation path.
+  // Coverage note: 6 its / 7 assertions below cover every validateParams branch
+  // (k=0; k > 2·nPerClass; odd-count; unequal class counts; out-of-domain; valid + oversized).
   it('validateParams rejects k = 0', () => {
     const issues = knnModule.validateParams?.({ k: 0, nPerClass: 12, metric: 'euclidean', seed: 42 }) ?? [];
     expect(issues.some((s) => /k must be ≥ 1/i.test(s))).toBe(true);

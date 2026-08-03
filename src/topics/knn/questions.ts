@@ -61,13 +61,13 @@ export const knnQuestions: Question[] = [
     mode: 'visual',
     prompt: 'In the simulation, scrub the k slider from 1 to 15 (Euclidean, default seed) and watch the decision boundary and the region-count metric. What happens?',
     options: [
-      'The boundary smooths and the region count decreases monotonically as k grows',
+      'The boundary smooths and the region count falls overall as k grows (≈51 at k=1 → ≈35 at k=15)',
       'The boundary becomes more jagged and the region count increases',
       'The boundary does not change; only the query-point color changes',
       'The region count oscillates randomly because k-NN has no training phase',
     ],
     answer: 'A',
-    explanation: 'k=1 draws the full Voronoi diagram (≈51 regions on the default seed); each step of the k-sweep widens the vote and merges cells, so the region count falls (≈35 at k=15). Scrubbing the run IS the boundary-smoothing animation. The distance rings around the query also grow as k widens.',
+    explanation: 'k=1 draws the full Voronoi diagram (≈51 regions on the default seed); each step of the k-sweep widens the vote and merges cells, so the region count falls overall (≈35 at k=15). The drop is a trend — small finite-sample wobbles and the vote saturation past k ≈ n/2 keep it from being a strict monotone. Scrubbing the run IS the boundary-smoothing animation. The distance rings around the query also grow as k widens.',
     trapExplanations: {
       B: 'Smoothing merges regions; jaggedness is the k=1 signature.',
       C: 'The boundary is exactly what changes.',
