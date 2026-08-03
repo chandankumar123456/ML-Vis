@@ -1,0 +1,93 @@
+// src/topics/ridge-regression/formulas.ts
+import type { Formula } from '../../engine/types';
+
+export const ridgeFormulas: Formula[] = [
+  {
+    id: 'ridge-objective',
+    latex: 'J(\\theta) = \\frac{1}{n}\\|y - X\\theta\\|_2^2 + \\lambda\\|\\theta\\|_2^2',
+    symbols: [
+      { symbol: 'X', meaning: 'design matrix (n × (d+1)) with bias column of 1s', dimensions: 'n samples × d+1 columns' },
+      { symbol: 'y', meaning: 'target vector (n × 1)', dimensions: 'n samples' },
+      { symbol: '\\theta', meaning: 'parameter vector [w₁ … w_d, b] — the L2 penalty applies to all of θ', dimensions: 'd+1 parameters' },
+      { symbol: '\\lambda', meaning: 'ridge penalty — strength of shrinkage (λ ≥ 0)', dimensions: 'non-negative scalar' },
+      { symbol: '\\|\\theta\\|_2^2', meaning: 'squared L2 norm = Σ θⱼ² — the shrinkage penalty', dimensions: 'squared' },
+    ],
+    assumptions: ['Features ideally standardized before fitting (else shrinkage is uneven across scales)'],
+    failureCases: ['λ → ∞ shrinks every coefficient toward 0 → underfit', 'λ = 0 reduces to plain OLS (no penalty)'],
+    derivesFrom: ['mse'],
+    connections: ['Normal equation', 'Constrained optimization'],
+    whyWorks: 'The quadratic penalty adds λ‖θ‖² to the MSE. It trades a little bias for a large cut in variance — the bias–variance tradeoff made explicit.',
+  },
+  {
+    id: 'ridge-closed-form',
+    latex: '\\theta = (X^T X + \\lambda I)^{-1} X^T y',
+    symbols: [
+      { symbol: 'X^T X', meaning: 'Gram matrix ((d+1) × (d+1)) — positive semi-definite', dimensions: 'd+1 × d+1' },
+      { symbol: '\\lambda I', meaning: 'λ added to EVERY diagonal entry of XᵀX', dimensions: 'd+1 × d+1' },
+      { symbol: 'X^T y', meaning: 'cross-product vector ((d+1) × 1)', dimensions: 'd+1' },
+      { symbol: '\\theta', meaning: 'ridge solution — exists for any λ > 0 even if XᵀX is singular', dimensions: 'd+1 parameters' },
+    ],
+    assumptions: ['λ > 0 for guaranteed invertibility; λ = 0 needs XᵀX invertible (no perfect collinearity)'],
+    failureCases: ['λ = 0 with collinear features → XᵀX singular → no unique solution', 'λ huge → θ ≈ 0 (underfit)'],
+    derivesFrom: ['ridge-objective'],
+    connections: ['Matrix inverse', 'Eigen-decomposition'],
+    whyWorks: 'Setting ∇J = 0 gives (XᵀX + λI)θ = Xᵀy. Since XᵀX is PSD (eigenvalues ≥ 0), adding λI lifts every eigenvalue to ≥ λ > 0 — the matrix becomes positive definite and always invertible.',
+  },
+  {
+    id: 'ridge-gram',
+    latex: 'X^T X + \\lambda I \\;=\\; \\sum_j (\\mu_j + \\lambda)\\, v_j v_j^T',
+    symbols: [
+      { symbol: '\\mu_j', meaning: 'eigenvalue j of XᵀX (≥ 0)', dimensions: 'non-negative' },
+      { symbol: 'v_j', meaning: 'eigenvector j of XᵀX', dimensions: '(d+1) × 1' },
+      { symbol: '\\mu_j + \\lambda', meaning: 'eigenvalue j after regularization — every eigenvalue rises by λ', dimensions: '≥ λ > 0' },
+    ],
+    assumptions: ['λ > 0'],
+    failureCases: ['λ = 0 → smallest eigenvalue stays 0 if XᵀX singular'],
+    derivesFrom: ['ridge-closed-form'],
+    connections: ['Positive definite matrices'],
+    whyWorks: 'The spectrum of XᵀX + λI is exactly the spectrum of XᵀX shifted by λ. Zero eigenvalues (collinearity, n < d+1) become λ — the singularity is removed by construction.',
+  },
+  {
+    id: 'ridge-path',
+    latex: '\\theta_j(\\lambda) = \\sum_k \\frac{\\mu_k}{\\mu_k + \\lambda}\\,\\frac{(v_k^T X^T y)}{\\mu_k}\\, v_{k,j}',
+    symbols: [
+      { symbol: '\\mu_k', meaning: 'eigenvalue k of XᵀX', dimensions: '≥ 0' },
+      { symbol: '\\frac{\\mu_k}{\\mu_k + \\lambda}', meaning: 'shrinkage factor in direction k — ∈ (0, 1] for λ > 0, ↓ as λ ↑', dimensions: 'fraction' },
+      { symbol: '\\|\\theta(\\lambda)\\|_2', meaning: 'coefficient norm — monotonically non-increasing in λ', dimensions: 'same units as θ' },
+    ],
+    assumptions: ['λ ≥ 0'],
+    failureCases: ['λ → ∞ → every shrinkage factor → 0 → θ → 0'],
+    derivesFrom: ['ridge-closed-form'],
+    connections: ['Ridge path visualization'],
+    whyWorks: 'In the eigenbasis, ridge scales each OLS component by μₖ/(μₖ + λ). Directions with SMALL eigenvalues (high variance, near-collinear) are shrunk most — but every direction is shrunk, and none ever becomes exactly zero.',
+  },
+  {
+    id: 'ridge-bias-variance',
+    latex: '\\mathbb{E}[\\text{test error}] = \\underbrace{\\text{Bias}^2(\\theta_\\lambda)}_{\\uparrow \\text{ with } \\lambda} + \\underbrace{\\text{Var}(\\theta_\\lambda)}_{\\downarrow \\text{ with } \\lambda} + \\sigma^2',
+    symbols: [
+      { symbol: '\\text{Bias}(\\theta_\\lambda)', meaning: 'how far the ridge estimate sits from the truth on average — grows with λ', dimensions: 'squared units' },
+      { symbol: '\\text{Var}(\\theta_\\lambda)', meaning: 'variance of the estimate across data draws — shrinks with λ', dimensions: 'squared units' },
+      { symbol: '\\sigma^2', meaning: 'irreducible noise — cannot be removed by any estimator', dimensions: 'squared units' },
+      { symbol: '\\lambda', meaning: 'the tradeoff dial: small λ → low bias/high variance; large λ → high bias/low variance', dimensions: 'non-negative scalar' },
+    ],
+    assumptions: ['Data drawn i.i.d.; test error averaged over the data distribution'],
+    failureCases: ['λ chosen too large → bias dominates → underfit', 'λ = 0 → variance dominates whenever XᵀX is ill-conditioned'],
+    derivesFrom: ['ridge-objective'],
+    connections: ['Bias–variance decomposition', 'Cross-validation'],
+    whyWorks: 'Ridge deliberately injects bias to shrink variance. The optimal λ balances the two — the test-error curve dips where the variance cut outweighs the bias cost (classic U-shape in high-variance regimes like near-collinear features).',
+  },
+  {
+    id: 'ridge-constrained',
+    latex: '\\min_\\theta \\|y - X\\theta\\|_2^2 \\quad \\text{s.t.} \\quad \\|\\theta\\|_2 \\le t \\;\\Longleftrightarrow\\; \\min_\\theta \\|y - X\\theta\\|_2^2 + \\lambda\\|\\theta\\|_2^2',
+    symbols: [
+      { symbol: 't', meaning: 'budget on the L2 radius — the constraint circle', dimensions: 'radius' },
+      { symbol: '\\lambda', meaning: 'Lagrange multiplier — larger λ ⇔ smaller allowed radius t', dimensions: 'non-negative scalar' },
+      { symbol: '\\|\\theta\\|_2 \\le t', meaning: 'solution confined to a ball (circle in 2D) — the L2 geometry', dimensions: 'radius' },
+    ],
+    assumptions: ['Strictly convex objective; one-to-one map between t and λ'],
+    failureCases: ['t = 0 → θ forced to 0 (all-shrink underfit)', 't large → constraint inactive → OLS'],
+    derivesFrom: ['ridge-objective'],
+    connections: ['Lasso constraint (L1 diamond)', 'KKT conditions'],
+    whyWorks: 'Ridge is the Lagrangian form of a hard constraint ‖θ‖₂ ≤ t. Geometrically the unconstrained ellipse optimum is pulled back until it just touches the L2 ball — the touch point is the ridge solution, and it lies ON the circle (never at an axis corner, unlike lasso’s diamond).',
+  },
+];
