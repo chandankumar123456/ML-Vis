@@ -17,7 +17,7 @@ import { ExplainStep } from './ExplainStep';
 export function registerAllViews(): void {
   registerView('scatter-plot', (p: ViewProps) => <ScatterPlot {...p} />);
   registerView('loss-curve', (p: ViewProps) => (
-    <LossCurve run={p.run ?? null} metricKey={p.topic?.lossMetricKey ?? 'cost'} />
+    <LossCurve run={p.run ?? null} metricKey={p.topic?.lossMetricKey ?? 'cost'} metricKey2={p.topic?.lossMetricKey2} />
   ));
   registerView('timeline-view', () => <TimelineView />);
   registerView('formula-explorer', (p: ViewProps) => <FormulaExplorer topic={p.topic} />);

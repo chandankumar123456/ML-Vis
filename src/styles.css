@@ -116,3 +116,16 @@ body { margin: 0; font-family: system-ui, sans-serif; background: var(--bg); col
 .explain-latex { margin: 0; font-family: 'Courier New', monospace; font-size: 0.9rem; background: var(--panel); border: 1px solid var(--border); border-radius: 6px; padding: 0.4rem 0.6rem; overflow-x: auto; }
 /* settings (theme / palette toggles in the sidebar) */
 .settings-row { display: flex; gap: 0.5rem; align-items: center; padding: 0.5rem 1rem; }
+/* loss curve (two-series legend + single-shot bar mode) */
+.loss-legend { display: flex; gap: 0.75rem; align-items: center; font-size: 0.75rem; color: var(--fg); background: var(--panel); border: 1px solid var(--border); border-radius: 6px; padding: 0.25rem 0.5rem; }
+.loss-legend-overlay { position: absolute; top: 8px; right: 12px; }
+.loss-legend-item { display: inline-flex; align-items: center; gap: 0.25rem; }
+.loss-legend-swatch { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+.loss-bars { height: 100%; display: flex; flex-direction: column; justify-content: flex-end; gap: 0.5rem; }
+.loss-bars-chart { flex: 1; display: flex; align-items: flex-end; justify-content: space-around; gap: 1rem; }
+.loss-bar-group { display: flex; flex-direction: column; align-items: center; gap: 0.25rem; }
+.loss-bar-pair { display: flex; align-items: flex-end; gap: 0.25rem; }
+.loss-bar-col { display: flex; flex-direction: column; align-items: center; gap: 0.125rem; }
+.loss-bar { width: 34px; border-radius: 3px 3px 0 0; }
+.loss-bar-value { font-size: 0.7rem; color: var(--fg); font-variant-numeric: tabular-nums; }
+.loss-step { font-size: 0.75rem; color: var(--fg); opacity: 0.8; }

@@ -347,6 +347,7 @@ export const polyModule: TopicModule = {
   mistakes: polyMistakes,
   testCases: polyTestCases,
   lossMetricKey: 'trainMse',
+  lossMetricKey2: 'testMse',
 
   validateParams: (p) => {
     const issues: string[] = [];

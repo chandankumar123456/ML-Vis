@@ -331,6 +331,7 @@ export const ridgeModule: TopicModule = {
   mistakes: ridgeMistakes,
   testCases: ridgeTestCases,
   lossMetricKey: 'testMse',
+  lossMetricKey2: 'trainMse',
 
   validateParams: (p) => {
     const issues: string[] = [];

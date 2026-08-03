@@ -206,6 +206,8 @@ export interface TopicModule {
   testCases: TestCase[];
   // metric key the topic's loss-curve view plots
   lossMetricKey?: string;
+  // optional second metric series (train vs test): enables two-line or bar rendering
+  lossMetricKey2?: string;
   // lifecycle hooks
   initialize?(params: Params): void;
   dispose?(): void;
