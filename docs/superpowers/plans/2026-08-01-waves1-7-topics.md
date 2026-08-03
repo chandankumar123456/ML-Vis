@@ -61,14 +61,16 @@ src/topics/<topic-id>/
 | `confusion-explorer` | Wave 7 | classification-metrics, roc-auc |
 | `roc-viewer` | Wave 7 | roc-auc |
 | `curve-comparator` | Wave 7 | bias-variance, overfitting-underfitting, cross-validation |
-| `derivation-player` | Wave 1 (small) | all topics with derivations |
-| `explain-step` panel | Wave 1 (small) | all topics (renders snapshot.explanation) |
+| `derivation-player` | Wave 1 (small) ✅ SHIPPED (`ab985b5`) | all topics with derivations |
+| `explain-step` panel | Wave 1 (small) ✅ SHIPPED (`00d0b04`) | all topics (renders snapshot.explanation) |
 
-Each new component follows the ViewProps contract: `{ run?, snapshot?, params, subscribe?, compact? }`.
+Each new component follows the ViewProps contract: `{ run?, snapshot?, params, subscribe?, compact?, topic? }` (the `topic?` field was added in `ab985b5` for topic-context lookups like formulaRef/lossMetricKey).
 
 ---
 
-## Wave 1 — Regression cluster (4 topics)
+## Wave 1 — Regression cluster (4 topics) ✅ COMPLETE
+
+All four topics + both small registry items shipped (`64f381b`/`77cb641`, `cad9487`, `0887bcb`, `122554e`, `00d0b04`, `e19793e`, `5121b62`); suite 146/146, lint, build, e2e 3/3. Platform gains: `TopicModule.lossMetricKey2` + LossCurve dual-series/bar mode (`5121b62`). New topics self-register via `import.meta.glob` — no main.tsx edits. See per-task drift/SHIPPED notes below.
 
 ### Task 1: multiple-linear-regression
 
@@ -165,6 +167,30 @@ Comparisons: vs simple-linear-regression, vs ridge (ridge fixes polynomial overf
 
 Failures: degree 30 → numerical instability of normal equation (huge condition number); data at extremes → Runge's phenomenon.
 
+> **Plan drift (Task 2):** (1) features are modeled on a NORMALIZED basis
+> u = x/x_max (x_max = 3) — degree-d in u ⇔ degree-d in x (linear
+> reparameterization, model class unchanged), but raw powers of x∈[−3,3]
+> reach 3¹⁵≈1.4×10⁷ and make ΦᵀΦ unusable; the conditioning story is real
+> (normalized κ ≈ 4.3e12 at d=15 vs raw 9.4e16). (2) `matInverse` pivot
+> threshold is 1e-14 (MLR uses 1e-12) — empirically tuned: d=15 solves 50/50
+> seeds at 1e-14 while d=30 fails cleanly (19/20 seeds; the shipped demo uses
+> the deterministic failing seed 42). (3) Bias-FIRST φ=[1,u,u²,…] matches the
+> plan's own expansion (MLR/SLR bias-last is for feature matrices). (4) Runge
+> demo is least-squares-with-noise (regression-domain analogue, honestly
+> labeled "Runge-type"). (5) "train vs test loss bars" delivered via the
+> LossCurve dual-series + bar-mode platform extension (commit `5121b62` —
+> lossMetricKey2 'testMse'; single-shot topics render grouped bars).
+>
+> SHIPPED: `cad9487` (feat, 9 files, 1019 lines) + `e19793e` (nits: honest
+> κ wording in the degree-30 failure demo). Reviews: spec APPROVE WITH NITS
+> 13/13 (5-seed U-curve verified: train ↓ strictly monotone across
+> [1,2,3,5,8,12,15], test U with min at d=2 measured 0.183/0.094/0.110/1.20/
+> 16482; NATs poly-001=6, poly-002=1.625 hand-verified; condition numbers
+> empirically re-verified); quality APPROVE zero issues (basis consistency
+> x↔u verified everywhere; no train/test leakage; d=15 explosion 28,068 real).
+> TDD caught a real bug: `mseOf('train')` fell through to ALL data — fixed
+> with explicit `subsetOf`. Gates: 146/146 full suite, lint, build, e2e 3/3.
+
 ### Task 3: ridge-regression
 
 **Files:** `src/topics/ridge-regression/{...}.ts`
@@ -187,6 +213,32 @@ Comparisons: vs lasso (geometry: circle vs diamond), vs OLS (bias-variance), vs 
 
 Failures: λ→∞ → θ→0 underfit; unscaled features → uneven shrinkage.
 
+> **Plan drift (Task 3):** (1) the run is a λ-SWEEP — one snapshot per λ on
+> [0, 0.5, …, slider], last snapshot exactly the slider λ — not an
+> epoch-based simulation (ridge is closed-form; scrubbing/playing IS the
+> shrinkage-path animation; loss-curve plots train/test vs λ with ≥2 points).
+> (2) TestCase 4's "test error ↓ then ↑" is PHYSICALLY UNREACHABLE under the
+> plan's constraints (d≤3, λ≤10, well-conditioned i.i.d. data): design
+> eigenvalues μ≈125 with σ²d/n≈0.45 → variance reduction is negligible while
+> bias² grows, so test error is monotone non-decreasing; the honest test
+> asserts train ↑, large-λ underfit (STRONG signal at λ=10, per review
+> NIT-1), moderate-λ ≈ free. The dip regime is collinear/high-d — covered by
+> the near-collinear case. (3) `collinearJitter` test-only param (1e-5) so
+> the OLS-explodes assertion is finite (‖θ‖≈2389 vs ridge 1.05, ratio >100);
+> exact-collinear stays the clean-failure path. (4) penalty applies to ALL of
+> θ including bias (plan's literal J = MSE + λ‖θ‖₂²; non-standard vs Hastie,
+> documented in formulas). (5) `collinear` is test-only, not a UI toggle
+> (mirrors MLR). Loss-curve train/test via `lossMetricKey:'testMse'` +
+> `lossMetricKey2:'trainMse'` (platform extension `5121b62`).
+>
+> SHIPPED: `0887bcb` (feat, 9 files, 1077 lines) + `e19793e` (T4 λ=10 tail
+> assertion — the earlier λ=5-only net ≈ +0.005 sat at the MC noise floor).
+> Reviews: spec APPROVE WITH NITS 13/13; quality APPROVE zero issues
+> (NATs ridge-001 w=4/3, ridge-008 b=1 hand-verified via (XᵀX+I)⁻¹; jitter
+> margin actually 10⁷× not 670×; "λ=0 bit-identical to MLR" verified — shared
+> TRUE_W/TRUE_B/PRNG). λ-sweep ≤21 snapshots, matrices ≤4×4. Gates: 146/146,
+> lint, build, e2e 3/3.
+
 ### Task 4: lasso-regression
 
 **Files:** `src/topics/lasso-regression/{...}.ts`
@@ -208,6 +260,33 @@ Mistakes: thinking lasso shrinks uniformly (it soft-thresholds); confusing λ di
 Comparisons: vs ridge (the diamond/circle contrast — the classic GATE figure), vs OLS, vs polynomial.
 
 Failures: correlated features → lasso picks arbitrarily; λ too large → all zero (underfit).
+
+> **Plan drift (Task 4):** (1) step model = ONE COORDINATE UPDATE per step
+> (plan's explicit suggestion); sweep = d+1 steps, convergence checked only
+> at sweep boundaries. (2) coefficient-path/geometry "views" substituted via
+> available channels — loss-curve plots the CD OBJECTIVE (`lossMetricKey:
+> 'objective'`), per-step soft-threshold narration with exact-zero events, a
+> visual question reading a path plot, geometry via formulas/derivations/
+> comparisons (no path/geometry registry view exists; quality-bar mandates
+> registry-only views). (3) ridge comparison is self-contained inside
+> testCases.test.ts (local ridge closed form — the ridge topic was being
+> written in parallel). (4) λ slider min 0 / step 0.25 / default 0.5
+> (ON-STEP); max 10 makes the all-zero failure UI-reachable (data corr ≈ 8.7).
+> (5) case-level fit assertion uses r2 > 0.9 (mse < 0.5 was unachievable:
+> measured MSE ≈ 1.28 at λ=0.5 from honest shrinkage bias); the plan's
+> monotone-decrease-per-sweep is tested on the trajectory. (6) matrices
+> emitted only on the converged snapshot (MLR precedent).
+>
+> SHIPPED: `122554e` (feat, 9 files, 1100 lines) + `e19793e` (sweeps fallback
+> 300 → 200 aligned with the schema default). Reviews: spec APPROVE WITH NITS
+> 13/13 (exact-zero verified runtime w4=0; UI-reachable all-zero at λ=10;
+> last snapshot converged for all test cases); quality APPROVE zero issues —
+> CD verified in depth: bias update excludes current bias (the oscillator-bug
+> class `b̃←ȳ−b̃` documented + avoided), soft-threshold returns literal IEEE-754
+> zero (exact zeros provable), monotonicity guaranteed by exact coordinate
+> minimizers, toStandard/fromStandard matches MLR's corrected pair; NATs
+> lasso-001 S(3.2,1)=2.2, lasso-002 S(0.8,1)=0 hand-verified. Gates: 146/146,
+> lint, build, e2e 3/3.
 
 ---
 
