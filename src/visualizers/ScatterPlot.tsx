@@ -4,15 +4,32 @@ import { CanvasStage, cssVar, type Bounds } from '../lib/canvas/CanvasStage';
 import { useContainerSize } from '../lib/canvas/useContainerSize';
 import { eventBus } from '../bus/eventBus';
 import type { ViewProps } from '../registry/viewRegistry';
-import type { VisualCommand } from '../engine/types';
+import type { VisualCommand, SimState } from '../engine/types';
 
 const PALETTE = { point: '#2563eb', hl: '#f59e0b' };
 
-export function ScatterPlot({ snapshot, params }: ViewProps) {
+export interface ScatterPlotProps extends ViewProps {
+  /**
+   * Additive interaction hook (default undefined — pan/zoom unaffected):
+   * when set, pointer-drag on a 'point' visual fires onDragPoint(id, x, y) with
+   * world coordinates instead of panning. Consumers re-run their simulation with
+   * the new position (e.g. knn query point / custom points dataset).
+   */
+  onDragPoint?: (id: string, x: number, y: number) => void;
+}
+
+export function ScatterPlot({ snapshot, params, onDragPoint }: ScatterPlotProps) {
   const [ref, size] = useContainerSize(600, 400);
   const stageRef = useRef<CanvasStage | null>(null);
   const highlightRef = useRef<string | null>(null);
   const [, bump] = useReducer((x: number) => x + 1, 0);
+
+  // Ref-forward the latest props so the interaction effect (subscribed once per
+  // size) never goes stale — no re-subscription on every snapshot change.
+  const dragRef = useRef(onDragPoint);
+  dragRef.current = onDragPoint;
+  const snapshotRef = useRef(snapshot);
+  snapshotRef.current = snapshot;
 
   useEffect(() => {
     const unsub = eventBus.subscribe((e) => {
@@ -36,14 +53,31 @@ export function ScatterPlot({ snapshot, params }: ViewProps) {
       const rect = stage.canvas.getBoundingClientRect();
       stage.zoomAt(e.clientX - rect.left, e.clientY - rect.top, e.deltaY < 0 ? 1.1 : 0.9);
     };
-    let dragging = false, lastX = 0, lastY = 0;
-    const onDown = (e: PointerEvent) => { dragging = true; lastX = e.clientX; lastY = e.clientY; };
+    let panning = false, draggingId: string | null = null, lastX = 0, lastY = 0;
+    const onDown = (e: PointerEvent) => {
+      // With an onDragPoint consumer: pressing ON a point visual picks it for
+      // dragging (drag fires instead of pan); pressing empty canvas still pans.
+      const drag = dragRef.current;
+      if (drag) {
+        const rect = stage.canvas.getBoundingClientRect();
+        const id = nearestPointId(stage, snapshotRef.current, e.clientX - rect.left, e.clientY - rect.top);
+        if (id) { draggingId = id; return; }
+      }
+      panning = true; lastX = e.clientX; lastY = e.clientY;
+    };
     const onMove = (e: PointerEvent) => {
-      if (!dragging) return;
+      const drag = dragRef.current;
+      if (draggingId && drag) {
+        const rect = stage.canvas.getBoundingClientRect();
+        const [wx, wy] = stage.screenToWorld(e.clientX - rect.left, e.clientY - rect.top);
+        drag(draggingId, wx, wy);
+        return;
+      }
+      if (!panning) return;
       stage.panBy(e.clientX - lastX, e.clientY - lastY);
       lastX = e.clientX; lastY = e.clientY;
     };
-    const onUp = () => { dragging = false; };
+    const onUp = () => { panning = false; draggingId = null; };
     stage.canvas.addEventListener('wheel', onWheel, { passive: false });
     stage.canvas.addEventListener('pointerdown', onDown);
     window.addEventListener('pointermove', onMove);
@@ -84,6 +118,13 @@ export function ScatterPlot({ snapshot, params }: ViewProps) {
             (cmd.color as string) ?? fg);
           break;
         }
+        case 'circle': {
+          // Radius r is in WORLD units (drawCircle scales by zoom). Filled faintly
+          // so nested distance rings read as halos, stroked with the given color.
+          stage.drawCircle(cmd.x as number, cmd.y as number, cmd.r as number,
+            'rgba(148,163,184,0.10)', (cmd.color as string) ?? '#94a3b8');
+          break;
+        }
       }
     }
   }, [snapshot, size, params, bump]);
@@ -104,8 +145,28 @@ function boundsOf(cmds: VisualCommand[]): Bounds {
       for (const [x, y] of c.points as [number, number][]) touch(x, y);
     }
     if (c.type === 'arrow') { touch(c.x1 as number, c.y1 as number); touch(c.x2 as number, c.y2 as number); }
+    if (c.type === 'circle') {
+      const r = c.r as number;
+      touch((c.x as number) - r, (c.y as number) - r);
+      touch((c.x as number) + r, (c.y as number) + r);
+    }
   }
   if (!Number.isFinite(x0)) return { x: [0, 1], y: [0, 1] };
   const padX = (x1 - x0) * 0.1 + 0.5, padY = (y1 - y0) * 0.1 + 0.5;
   return { x: [x0 - padX, x1 + padX], y: [y0 - padY, y1 + padY] };
+}
+
+/** Pick the 'point' visual closest to the pointer (14px pickup radius) — or null. */
+function nearestPointId(stage: CanvasStage, snap: SimState | null | undefined, px: number, py: number): string | null {
+  if (!snap) return null;
+  let best: string | null = null;
+  let bestD = 14 * 14;
+  for (const c of snap.visuals) {
+    if (c.type !== 'point') continue;
+    const [sx, sy] = stage.worldToScreen(c.x as number, c.y as number);
+    const dx = sx - px, dy = sy - py;
+    const d2 = dx * dx + dy * dy;
+    if (d2 <= bestD) { bestD = d2; best = c.id ?? null; }
+  }
+  return best;
 }

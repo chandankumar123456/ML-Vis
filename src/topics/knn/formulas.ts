@@ -1,0 +1,102 @@
+// src/topics/knn/formulas.ts
+import type { Formula } from '../../engine/types';
+
+export const knnFormulas: Formula[] = [
+  {
+    id: 'knn-euclidean',
+    latex: 'd(p, q) = \\sqrt{\\sum_{j=1}^{d} (p_j - q_j)^2}',
+    symbols: [
+      { symbol: 'p_j, q_j', meaning: 'j-th feature of the stored point p and the query q', dimensions: 'feature units' },
+      { symbol: 'd(p, q)', meaning: 'Euclidean (L2) distance between p and q', dimensions: 'feature units' },
+      { symbol: 'd', meaning: 'number of features (2 in the simulation)', dimensions: 'count' },
+    ],
+    assumptions: ['Features should be standardized (z-scored) before distance — otherwise a large-scale feature dominates the sum of squares'],
+    failureCases: ['One feature with a huge range swamps the others (dominating-feature trap)', 'High dimension d: all pairwise distances concentrate (curse of dimensionality)'],
+    derivesFrom: [],
+    connections: ['Manhattan distance', 'Minkowski distance', 'Feature scaling'],
+    whyWorks: 'The L2 norm measures straight-line distance. Squaring then summing gives every feature a squared contribution, so features with larger numeric scale contribute more — the reason scaling matters.',
+  },
+  {
+    id: 'knn-manhattan',
+    latex: 'd(p, q) = \\sum_{j=1}^{d} |p_j - q_j|',
+    symbols: [
+      { symbol: '|p_j - q_j|', meaning: 'absolute difference on feature j', dimensions: 'feature units' },
+      { symbol: 'd(p, q)', meaning: 'Manhattan (L1) distance — the "city-block" metric', dimensions: 'feature units' },
+    ],
+    assumptions: ['Features standardized (same scaling argument as L2, though L1 is less sensitive to a single huge feature)'],
+    failureCases: ['Rotating the axes changes L1 distances (axis-aligned metric)', 'In high dimensions L1 also loses discrimination (volume concentration)'],
+    derivesFrom: [],
+    connections: ['Euclidean distance', 'Minkowski distance', 'Lasso regularization (L1)'],
+    whyWorks: 'L1 sums absolute coordinate differences — the shortest path along an axis-aligned grid. Its diamond iso-distance contours make the nearest-neighbor regions (Voronoi cells) change shape compared with L2, which is why metric choice alters the decision boundary.',
+  },
+  {
+    id: 'knn-minkowski',
+    latex: 'd(p, q) = \\left( \\sum_{j=1}^{d} |p_j - q_j|^m \\right)^{1/m}',
+    symbols: [
+      { symbol: 'm', meaning: 'Minkowski order: m = 2 → Euclidean, m = 1 → Manhattan, m → ∞ → Chebyshev (max coordinate difference)', dimensions: '≥ 1' },
+      { symbol: 'd(p, q)', meaning: 'Minkowski distance of order m', dimensions: 'feature units' },
+    ],
+    assumptions: ['m ≥ 1 (for m < 1 the "distance" violates the triangle inequality and is not a metric)'],
+    failureCases: ['m = 1 has kinks at the axes (non-differentiable)', 'm → ∞ keeps only the largest |p_j − q_j|, discarding all other features'],
+    derivesFrom: ['knn-euclidean'],
+    connections: ['Euclidean distance', 'Manhattan distance', 'Feature scaling'],
+    whyWorks: 'Minkowski is the unifying family: it interpolates between the city-block metric (m=1) and straight-line Euclidean (m=2), with Chebyshev as the limit — a single formula for the GATE "which distance is which m" questions.',
+  },
+  {
+    id: 'knn-majority-vote',
+    latex: '\\hat{y}(q) = \\underset{c}{\\arg\\max} \\sum_{i \\in N_k(q)} [y_i = c]',
+    symbols: [
+      { symbol: 'N_k(q)', meaning: 'the k nearest neighbors of q under the chosen metric', dimensions: 'set of k indices' },
+      { symbol: '[y_i = c]', meaning: 'indicator: 1 when neighbor i has class c, else 0', dimensions: '0 or 1' },
+      { symbol: '\\hat{y}(q)', meaning: 'predicted class of q — the majority vote of the k neighbors', dimensions: 'class label' },
+      { symbol: 'k', meaning: 'neighborhood size — the smoothing dial', dimensions: 'positive integer' },
+    ],
+    assumptions: ['Ties broken deterministically: nearest-of-tied (smallest distance inside the k-set wins; equal distance → lower class index)'],
+    failureCases: ['k = 1: overfits noise (a single outlier flips the vote)', 'k too large: the boundary becomes the global majority — underfits local structure', 'Even k with 2 classes → ties are common; odd k removes them only for 2 classes, not for 3+'],
+    derivesFrom: [],
+    connections: ['Decision boundary', 'Voronoi diagram', 'Bias–variance tradeoff'],
+    whyWorks: 'The vote is an empirical estimate of the posterior P(class | neighborhood): the most frequent class among the k nearest points. Small k → low bias / high variance; large k → high bias / low variance — the smoothing knob.',
+  },
+  {
+    id: 'knn-loo-error',
+    latex: 'E_{\\text{LOO}}(k) = \\frac{1}{n} \\sum_{i=1}^{n} [ \\hat{y}_{-i}(p_i) \\neq y_i ]',
+    symbols: [
+      { symbol: '\\hat{y}_{-i}(p_i)', meaning: 'prediction for point p_i using the other n−1 points (leave-one-out)', dimensions: 'class label' },
+      { symbol: 'n', meaning: 'dataset size', dimensions: 'count' },
+      { symbol: 'E_{\\text{LOO}}(k)', meaning: 'leave-one-out error at k — an honest estimate of generalization', dimensions: 'fraction (0..1)' },
+    ],
+    assumptions: ['Same k and metric for every fold; deterministic tie-break so the estimate is reproducible'],
+    failureCases: ['LOO is expensive (n refits — O(n²·d) for k-NN)', 'High-variance estimate on small n'],
+    derivesFrom: ['knn-majority-vote'],
+    connections: ['Cross-validation', 'Bias–variance tradeoff'],
+    whyWorks: 'Train error is a lie for k-NN (k=1 always scores 0 — every point is its own nearest neighbor). LOO excludes the point being predicted, so k=1 can already be wrong: it is the honest error-vs-k curve.',
+  },
+  {
+    id: 'knn-complexity',
+    latex: 'T_{\\text{predict}} = O(n \\cdot d) \\qquad \\text{(no training phase)}',
+    symbols: [
+      { symbol: 'n', meaning: 'training set size — every prediction scans ALL points', dimensions: 'count' },
+      { symbol: 'd', meaning: 'number of features per distance computation', dimensions: 'count' },
+      { symbol: 'T_{\\text{predict}}', meaning: 'time per single prediction', dimensions: 'ops' },
+    ],
+    assumptions: ['Naive linear scan (no k-d tree / ball tree acceleration)'],
+    failureCases: ['n large → slow inference (the "large-n failure")', 'd large → distance is meaningless (curse of dimensionality)'],
+    derivesFrom: [],
+    connections: ['Curse of dimensionality', 'Lazy learning'],
+    whyWorks: 'k-NN stores the whole training set and does nothing at "training" time (lazy learner); each query pays O(n·d) to compute distances to every stored point. Training is O(1) — the memory/time burden is pushed to inference.',
+  },
+  {
+    id: 'knn-curse',
+    latex: '\\lim_{d \\to \\infty} \\frac{\\text{volume of the } \\epsilon\\text{-shell}}{\\text{volume of the cube}} = 1 - (1 - 2\\epsilon)^d \\to 1',
+    symbols: [
+      { symbol: 'd', meaning: 'dimension — in a unit cube, the outer ε-shell contains almost all the volume', dimensions: 'count' },
+      { symbol: '\\epsilon', meaning: 'shell thickness fraction', dimensions: 'fraction' },
+      { symbol: '(1 - 2\\epsilon)^d', meaning: 'fraction of volume in the inner cube — decays exponentially with d', dimensions: 'fraction' },
+    ],
+    assumptions: ['Uniform data in a unit hypercube — the canonical high-dimensional concentration argument'],
+    failureCases: ['d ≈ 10+: nearest neighbors are nearly as far as farthest ones → k-NN degenerates'],
+    derivesFrom: ['knn-euclidean'],
+    connections: ['Curse of dimensionality', 'Feature selection'],
+    whyWorks: 'In high dimension almost all volume sits at the surface, so every point is "far" from every other: distances concentrate and k-NN loses the notion of a meaningful nearest neighbor. This is the indirect link to the curse-of-dimensionality GATE questions.',
+  },
+];
