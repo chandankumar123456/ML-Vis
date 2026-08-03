@@ -12,6 +12,7 @@ import { MistakeView } from './MistakeView';
 import { QuestionPlayer } from './QuestionPlayer';
 import { MatrixAnimator } from './MatrixAnimator';
 import { DerivationPlayer } from './DerivationPlayer';
+import { ExplainStep } from './ExplainStep';
 
 export function registerAllViews(): void {
   registerView('scatter-plot', (p: ViewProps) => <ScatterPlot {...p} />);
@@ -24,4 +25,5 @@ export function registerAllViews(): void {
   registerView('question-player', (p: ViewProps) => <QuestionPlayer topic={p.topic} />);
   registerView('matrix-animator', (p: ViewProps) => <MatrixAnimator snapshot={p.snapshot} />);
   registerView('derivation-player', (p: ViewProps) => <DerivationPlayer topic={p.topic} />);
+  registerView('explain-step', (p: ViewProps) => <ExplainStep snapshot={p.snapshot} topic={p.topic} />);
 }

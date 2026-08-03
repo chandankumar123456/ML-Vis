@@ -102,5 +102,17 @@ body { margin: 0; font-family: system-ui, sans-serif; background: var(--bg); col
 .derivation-nav { display: flex; align-items: center; gap: 0.5rem; }
 .derivation-steps { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.5rem; }
 .derivation-why { color: var(--fg); opacity: 0.8; font-size: 0.9rem; }
+/* explain step */
+.explain-step { display: flex; flex-direction: column; gap: 0.6rem; }
+.explain-toggle { display: flex; align-items: center; gap: 0.4rem; width: 100%; text-align: left; padding: 0.5rem 0.7rem; background: var(--panel); border: 1px solid var(--border); border-radius: 8px; color: var(--fg); cursor: pointer; font-weight: 600; }
+.explain-toggle:hover { border-color: var(--accent); }
+.explain-chevron { color: var(--accent); font-size: 0.8rem; }
+.explain-body { display: flex; flex-direction: column; gap: 0.5rem; }
+.explain-label { margin: 0; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--fg); opacity: 0.7; }
+.explain-chips { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+.explain-chip { padding: 0.25rem 0.6rem; border: 1px solid var(--border); background: var(--panel); color: var(--fg); border-radius: 999px; font-size: 0.8rem; }
+.explain-why { margin: 0; color: var(--fg); line-height: 1.5; }
+.explain-formula { display: flex; flex-direction: column; align-items: flex-start; gap: 0.3rem; }
+.explain-latex { margin: 0; font-family: 'Courier New', monospace; font-size: 0.9rem; background: var(--panel); border: 1px solid var(--border); border-radius: 6px; padding: 0.4rem 0.6rem; overflow-x: auto; }
 /* settings (theme / palette toggles in the sidebar) */
 .settings-row { display: flex; gap: 0.5rem; align-items: center; padding: 0.5rem 1rem; }
