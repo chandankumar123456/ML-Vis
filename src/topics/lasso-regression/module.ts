@@ -320,7 +320,7 @@ export const simulation = {
     // 2. sweep budget reached (a full sweep just completed — sweep only increments
     //    at cycle boundaries, so this always lands on a whole-sweep boundary).
     if (s.algorithm.converged === true) return null;
-    if (((s.algorithm.sweep as number) ?? 0) >= ((p.sweeps as number) ?? 300)) return null;
+    if (((s.algorithm.sweep as number) ?? 0) >= ((p.sweeps as number) ?? 200)) return null;
     const data = generateData(p);
     const sc = standardize(data);
     const d = data.d;

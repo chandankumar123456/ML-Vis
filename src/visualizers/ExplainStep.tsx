@@ -19,13 +19,13 @@ export function ExplainStep({ snapshot, topic }: {
 
   return (
     <div className="explain-step">
-      <button className="explain-toggle" aria-expanded={open}
+      <button className="explain-toggle" aria-expanded={open} aria-controls="explain-body"
         onClick={() => setOpen((v) => !v)}>
         <span className="explain-chevron" aria-hidden="true">{open ? '▾' : '▸'}</span>
         Why did this step change?
       </button>
       {open && (
-        <div className="explain-body">
+        <div className="explain-body" id="explain-body">
           {exp.changed.length > 0 && (
             <>
               <h4 className="explain-label">Changed</h4>

@@ -69,7 +69,7 @@ describe('ridge-regression testCases', () => {
   // error while visibly shrinking ‖θ‖.
   it('bias–variance: train error rises with λ; large λ underfits (test error ↑)', () => {
     const seeds = [1, 2, 3, 4, 5];
-    const lambdas = [0, 0.5, 1, 2, 3, 5];
+    const lambdas = [0, 0.5, 1, 2, 3, 5, 10];
     const avgTrain = lambdas.map(() => 0);
     const avgTest = lambdas.map(() => 0);
     const avgNorm = lambdas.map(() => 0);
@@ -83,8 +83,12 @@ describe('ridge-regression testCases', () => {
     }
     // (a) train error grows as λ grows (ridge fits the train set worse)
     expect(avgTrain[5]).toBeGreaterThan(avgTrain[0] + 0.05);
-    // (b) the "too much shrinkage" tail: test error worsens at large λ (bias dominates)
-    expect(avgTest[5]).toBeGreaterThan(avgTest[0] + 0.05);
+    // (b) the "too much shrinkage" tail: assert the STRONG signal at λ=10
+    //     (net ≈ +0.14 analytically, ~30× the λ=5 net of ≈ +0.005 that sits at
+    //     the per-seed MC noise floor — the earlier λ=5-only assertion was
+    //     deterministic-but-noise-lucky, fixed per review NIT-1)
+    expect(avgTest[6]).toBeGreaterThan(avgTest[0] + 0.05);
+    expect(avgTest[6]).toBeGreaterThan(avgTest[5]);
     // (c) moderate λ ≈ free shrinkage on test error while ‖θ‖ drops — the honest
     //     sweet spot for well-conditioned data (the dip regime is collinear/high-d,
     //     covered by the near-collinear case above)

@@ -7,7 +7,7 @@ export const polyFailureDemos: FailureDemo[] = [
     title: 'Degree 30: the normal equation becomes numerically unstable',
     scenario: 'numerical-instability',
     params: { degree: 30, nTrain: 40, nTest: 20, noise: 0.5, seed: 42, fitOn: 'train' },
-    narration: 'Even with 40 training points (degree 30 → 31 parameters is formally solvable), the Vandermonde Gram matrix ΦᵀΦ is numerically singular: the power-basis condition number is ~10²⁵, far beyond double precision. The inversion fails and the run terminates cleanly with a non-finite θ.',
+    narration: 'Even with 40 training points (degree 30 → 31 parameters is formally solvable), the Vandermonde Gram matrix ΦᵀΦ is numerically singular: its condition number is beyond double precision at these degrees (κ ≳ 10¹⁶ for the normalized basis, and grows super-exponentially — the raw power basis reaches ~10²⁵). The inversion fails and the run terminates cleanly with a non-finite θ.',
     whyItBreaks: 'κ(ΦᵀΦ) grows super-exponentially with degree (Vandermonde matrices are among the worst-conditioned matrices known). Pivots drop below machine-relative tolerance, so the solve returns NaN — the sandbox flags the run as failed. This is exactly why the simulation caps the degree slider at 15 and why ridge (ΦᵀΦ + λI) exists.',
   },
   {
