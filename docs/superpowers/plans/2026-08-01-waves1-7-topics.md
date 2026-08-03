@@ -50,7 +50,7 @@ src/topics/<topic-id>/
 
 | Component | When | Used by |
 |---|---|---|
-| `decision-boundary` | Wave 2 | logistic-regression, softmax-regression, svm-*, perceptron, knn, lda |
+| `decision-boundary` | Wave 2 ✅ SHIPPED (`733376e`, hardened `e138f2b`) | logistic-regression, softmax-regression, svm-*, perceptron, knn, naive-bayes |
 | `eigenviewer` | Wave 4 | pca, pca-svd, lda |
 | `tree-builder` | Wave 5 | decision-trees, decision-trees-regression |
 | `cluster-animator` | Wave 5 | kmeans, hierarchical-clustering |
@@ -290,7 +290,9 @@ Failures: correlated features → lasso picks arbitrarily; λ too large → all 
 
 ---
 
-## Wave 2 — Classification cluster (5 topics)
+## Wave 2 — Classification cluster (5 topics) ✅ COMPLETE
+
+All five topics + decision-boundary shipped (`733376e`, `0c358b0`, `d729d9d`, `3aad4b0`, `645cfa4`, `d1492bc`); review cycle closed (12 reviews, fixes `e138f2b`/`880eb5e`/`d5c69a7`, closure re-reviews all green); suite 273/273 (28 files), lint, build, e2e 3/3. Platform gains: classifier registry contract (`registerClassifier`/`getClassifier`, viewRegistry.ts); ScatterPlot `onDragPoint` + `circle` VisualCommand; `src/visualizers/bounds.ts` (shared boundsOfVisuals incl. circles + `safeClassify`). Note: the softmax task was agent-cancelled mid-flight, but all 9 files landed, passed 19/19 tests, and were reviewed to APPROVE — no work was lost. See per-task drift/SHIPPED notes below.
 
 ### Task 5: New registry component — decision-boundary (+ derivation-player, explain-step)
 
@@ -313,6 +315,9 @@ Update `src/registry/viewRegistry.ts` (add classifier map + tests). DecisionBoun
 
 Run: `npm run lint && npm run test && npm run build`
 Commit: `feat: decision-boundary, derivation-player, explain-step components`
+
+> **Plan drift (Task 5):** derivation-player + explain-step were already shipped in Wave 1 (registry table: `ab985b5`, `00d0b04`); this wave shipped only decision-boundary. The classifier contract landed exactly as planned — `registerClassifier(id, fn: (x, y, params) => number)` / `getClassifier(id)` in viewRegistry.ts (Map-backed; unknown id → undefined, never throws; re-register overwrites; return = CLASS INDEX 0/1, not probability). DecisionBoundary: 50×50 grid of cell-center samples → ImageData → drawImage upscale (`data-decision-grid="50"`, colors via `--cat1/--cat2` CSS vars), merges `{...params, ...snapshot.algorithm}` ONCE per snapshot so classifiers read current-step weights, bounds follow ScatterPlot's convention with [−7,7]² fallback. Review-mandated hardening (`e138f2b`): `safeClassify` wraps every classifier call site (throwing/undefined/NaN classifiers degrade to class 0 — no canvas crash), `imageSmoothingEnabled=false` bracket for crisp upscale, grid memoized per (snapshot, classifier, effParams) so scrub/re-render reuses 2500 classifications, bounds include circle extents (knn rings), canvas aria-label; pure helpers extracted to `src/visualizers/bounds.ts` (+9 tests).
+> SHIPPED: `733376e` (feat, 6 files, 518 insertions) → reviews: spec 11/11 APPROVE WITH NITS; quality REQUEST CHANGES (Critical: uncaught classifier exceptions crash the render; Medium: blurry upscale, per-call params rebuild breaking identity-keyed caches, knn per-call point regeneration; Low: circle-less boundsOfVisuals, missing aria-label) → fixes `e138f2b` → quality re-review: ALL 7 findings CLOSED, no regressions. Hardening also required knn-side points memoization → `880eb5e`.
 
 ### Task 6: logistic-regression
 
@@ -338,6 +343,9 @@ Comparisons: vs perceptron (loss: CE vs hinge-ish zero), vs SVM (margin maximize
 
 Failures: class imbalance → boundary pushed to majority; non-linear data → linear boundary fails; saturated sigmoid → vanishing gradient.
 
+> **Plan drift (Task 6):** (1) step model = one GD epoch over a fixed 2D dataset (two Gaussian clusters, configurable margin, seeded); the classifier contract feeds decision-boundary — each snapshot writes current-step weights into `snapshot.algorithm` (`w1/w2/b` in ORIGINAL space via toStandard/fromStandard, bias unpenalized) and the registered `logistic-regression` classifier reads them (memoized `train()` fallback keyed by params when algorithm weights are absent). (2) activation-view is Wave 6 — NOT registered; the sigmoid response is shown via scatter-plot probability heat-coloring + matrix-animator log-odds story (z = w·x + b, σ(z)) instead (registry-only views rule). (3) loss = stable softplus cross-entropy `y·softplus(−z)+(1−y)·softplus(z)` — differentiates to `(1/n)Σ(ŷ−y)x` (finite-diff verified), no log(0) at saturation; CE monotone non-increasing at lr 0.3 (300 epochs). (4) `lr` slider max 1.0; validateParams warns on lr > 1. (5) lossMetricKey 'ce'.
+> SHIPPED: `0c358b0` (feat, 9 files, 1077 lines) → reviews: spec 14/14 APPROVE WITH NITS (3 cosmetic); quality APPROVE (gradient identity verified, boundary in original space, σ(10)≈1−4.5e-5, monotone CE, jitter margin 10⁷×). Tests 17/17.
+
 ### Task 7: cross-entropy-loss (+ MLE — same module, two facets)
 
 **Files:** `src/topics/cross-entropy-loss/{...}.ts`
@@ -359,6 +367,9 @@ Mistakes: dropping the log; using log base 2 vs e (bits vs nats — units); conf
 Comparisons: vs MSE, vs hinge loss (SVM), vs 0-1 loss (non-differentiable).
 
 Failures: p_i = 0 with q_i = 0 → 0·log 0 undefined (use convention/ε); log(0) → −∞ in naive implementation.
+
+> **Plan drift (Task 7):** (1) `facet` param `('cross-entropy'|'mle')` — one module, two simulations; K=2 only (Bernoulli; binomial coefficients omitted — θ-independent, so the NLL=CE identity holds; no multinomial). (2) cross-entropy facet: p₀/q₀ sliders [0.05, 0.95] step 0.05; q₀-sweep ≤19 snapshots, last = slider; metrics cePQ/hP/klPQ; lossMetricKey 'cePQ' + lossMetricKey2 'hP' (dual-series loss-curve: CE vs entropy H(p)). (3) MLE facet: 21-point θ grid 0.02→0.98; likelihood/log-likelihood/MLE curves; MLE ⟺ min-CE verified (hand-check h=12, n=20, θ=0.6 → NLL 0.6020). (4) xlogy convention: `0·log0 = 0` (x≤0 guard); x>0, y=0 → unclamped −∞ (documented failure demo). (5) deterministic grids — no seed param. NATs verified live: CE(p‖q)=1.194, KL=0.223, θ̂=0.7, KL=0.092.
+> SHIPPED: `d729d9d` (feat, 9 files, 13 tests) → reviews: spec 14/14 APPROVE WITH NITS (3 informational); quality APPROVE (all 4 NATs, NLL=CE derivation hand-checked, xlogy audit).
 
 ### Task 8: softmax-regression (multiclass logistic)
 
@@ -382,6 +393,9 @@ Comparisons: vs logistic (K=2 equivalence), vs one-vs-rest, vs neural network ou
 
 Failures: class imbalance; logits huge → exp overflow (use log-sum-exp); correlated classes.
 
+> **Plan drift (Task 8):** (1) parameterization W(K×d) + per-class bias b(K,) (bias-last, rows = classes — matrix-animator shows W animating per epoch); algorithm keys `w11..w32, b1..b3` written per step in ORIGINAL space; classifier = argmax over σ(Wx+b) → class index, with memoized `trainFinal` fallback. (2) K=3 fixed, 3 Gaussian clusters, lr/epochs; per-epoch misclassification count + accuracy metrics (lossMetricKey 'ce' + lossMetricKey2 'accuracy'). (3) stable max-shift softmax (log-sum-exp style); gradient `(1/n)Σ(ŷ_k − 1{y=k})x` finite-diff verified (h=1e-5, tol 1e-6); K=2 ⟺ σ(z₁−z₀) algebra verified. (4) distribution-view is Wave 4 — NOT registered; per-point probability mass shown via scatter-plot coloring + the loss/accuracy curves. NATs verified: softmax-001 ŷ₃ = e³/(e¹+e²+e³) = 0.66524; softmax-002 ŷ₂ = e¹/(1+e¹+1) = 0.57612.
+> SHIPPED: `3aad4b0` (feat, 9 files, 19 tests) → reviews: spec 15/15 APPROVE WITH NITS (2 conventions); quality APPROVE (gradient, FD, shift-invariance tol 1e-10, both NATs). Task was agent-cancelled mid-flight but all files landed and were verified — no work lost.
+
 ### Task 9: knn
 
 **Files:** `src/topics/knn/{...}.ts`
@@ -404,6 +418,9 @@ Comparisons: vs naive bayes (lazy vs eager... actually NB has params; both simpl
 
 Failures: high dimensions (curse), class imbalance (majority swamps), noisy features, large n (slow inference).
 
+> **Plan drift (Task 9):** (1) step model = k-SWEEP mirroring ridge's λ-sweep — one snapshot per k on [1..params.k], last = slider k; scrubbing IS the boundary-smoothing + ring-expansion animation (lazy learner, no epochs). (2) metrics: lossMetricKey 'error' = honest LEAVE-ONE-OUT error (k=1 is NOT zero: 0.417 on default seed), lossMetricKey2 'trainError' = self-classification (k=1 → exactly 0 — the "k=1 overfits" signature). MEASURED LOO curve is NON-monotone: bottoms 0.208 at k∈{7,9,15,16,18}, oscillates [0.21, 0.42], creeps back up at k=19–20; curves coincide with train error at k∈{15,16,18}; region count 51→35 (k=1 vs 15) is a TREND, not strict monotone — all narrative claims reworded to match the measured curve (fixes `880eb5e`, `d5c69a7`). (3) ScatterPlot extended with optional `onDragPoint` (additive; 14px pickup; screenToWorld) + `circle` VisualCommand (one distance ring per neighbor; `type` is `string` — pre-existing non-discriminated design, structurally valid). (4) `points` JSON param (validated: even count, equal class counts, in [−5,5]², ≥2 points, k ≤ size); scaling deliberately NOT applied — z-scoring lives in mistakes. (5) classifier path memoizes the point set (`getPoints`, key = seed|nPerClass|margin or points-JSON, bounded 64) — DecisionBoundary's 2500 calls/snapshot hit one cached array.
+> SHIPPED: `645cfa4` (feat, 10 files incl. ScatterPlot) + fixes `880eb5e` (points memo, narrative) + `d5c69a7` (residual narrative: honest trend claims, metric-diff changed list) → reviews: spec 13/15 APPROVE WITH NITS — 2 FAILs: item 12 test-coverage claim (report said "7 tests in one it"; code has 6 its / 7 assertions — coverage note added), item 14 narrative monotonicity (claims contradicted the measured curve) → re-review: item 12 PASS, item 14 empirical claims 100% reproduced + residuals fixed; quality APPROVE (tie-break nearest-of-tied, L1/L2 flip, LOO honest 0.417, onDragPoint additive, circles world→pixel, region counts). Tests 15/15.
+
 ### Task 10: naive-bayes
 
 **Files:** `src/topics/naive-bayes/{...}.ts`
@@ -425,6 +442,9 @@ Mistakes: ignoring prior; multiplying raw (unsmoothed) zero probabilities; assum
 Comparisons: vs logistic (generative vs discriminative), vs knn (parametric vs instance), vs decision trees.
 
 Failures: correlated features (double counting evidence); rare events (zero counts); continuous features mishandled as categorical.
+
+> **Plan drift (Task 10):** (1) dual model: Gaussian NB (primary, 2 continuous features) + `discrete` toggle (categorical NB over a crafted 8-row table, V=4); smoothing = variance floor σ̃²=σ̂²+α for Gaussian / Laplace α for discrete (V counted correctly in the denominator). (2) correlation slider [0, 0.95] step 0.05 via shared latent `x1 = μ1 + √ρ·u + √(1−ρ)·w1`, `x2 = μ2 + √ρ·u + √(1−ρ)·w2` — Corr = ρ EXACTLY (construction verified); correlation sweep refits per snapshot; "without independence" contrast = full-covariance joint Gaussian (posterior flips 0.872 → 0.003 at ρ=0.9 — direction verified; Σ⁻¹ via adjugate, ΣΣ⁻¹=I checked). (3) distribution-view is Wave 4 — NOT registered; per-feature likelihoods shown via formula-explorer + scatter coloring instead. (4) log-space posterior via logsumexp (no underflow); fit memo cache bounded 64, keyed nClasses/nPerClass/correlation/smoothing/seed. NATs verified: nb-001 = 14/15, nb-005 = 5/6; naive-vs-joint contrast correct.
+> SHIPPED: `d1492bc` (feat, 9 files, 13 tests) → reviews: spec APPROVE WITH NITS (13/13 items, 7 test cases); quality APPROVE (Gaussian MLE variance /n, variance floor on both features, logsumexp stability, ρ-exactness, contrast direction, Laplace V).
 
 ---
 
