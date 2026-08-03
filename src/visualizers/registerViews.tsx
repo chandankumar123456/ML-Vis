@@ -13,6 +13,7 @@ import { QuestionPlayer } from './QuestionPlayer';
 import { MatrixAnimator } from './MatrixAnimator';
 import { DerivationPlayer } from './DerivationPlayer';
 import { ExplainStep } from './ExplainStep';
+import { DecisionBoundary } from './DecisionBoundary';
 
 export function registerAllViews(): void {
   registerView('scatter-plot', (p: ViewProps) => <ScatterPlot {...p} />);
@@ -26,4 +27,9 @@ export function registerAllViews(): void {
   registerView('matrix-animator', (p: ViewProps) => <MatrixAnimator snapshot={p.snapshot} />);
   registerView('derivation-player', (p: ViewProps) => <DerivationPlayer topic={p.topic} />);
   registerView('explain-step', (p: ViewProps) => <ExplainStep snapshot={p.snapshot} topic={p.topic} />);
+  // decision-boundary resolves its classifier internally via getClassifier(topic.id);
+  // SVM topics later wire supportVectors/marginLines through their topic module.
+  registerView('decision-boundary', (p: ViewProps) => (
+    <DecisionBoundary snapshot={p.snapshot} params={p.params} topic={p.topic} />
+  ));
 }

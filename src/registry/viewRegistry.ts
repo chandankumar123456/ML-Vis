@@ -23,3 +23,17 @@ export function registerView(id: string, comp: ComponentType<ViewProps>): void {
 }
 export function getView(id: string): ComponentType<ViewProps> | undefined { return views.get(id); }
 export function viewExists(id: string): boolean { return views.has(id); }
+
+// ===== Classifier registry =====
+// Topics may register a 2D classifier alongside their views; the
+// 'decision-boundary' visualizer resolves it via getClassifier(topic.id) to
+// paint class regions. The classifier maps a world-space point + the topic's
+// current params to a class index (0, 1, 2, ...).
+export type Classifier = (x: number, y: number, params: Params) => number;
+
+const classifiers = new Map<string, Classifier>();
+
+export function registerClassifier(id: string, fn: Classifier): void {
+  classifiers.set(id, fn);
+}
+export function getClassifier(id: string): Classifier | undefined { return classifiers.get(id); }
