@@ -1,0 +1,91 @@
+// src/topics/svm-soft-margin/formulas.ts
+import type { Formula } from '../../engine/types';
+
+export const svmSoftFormulas: Formula[] = [
+  {
+    id: 'svm-soft-objective',
+    latex: '\\min_{w,b,\\xi}\\; \\frac{1}{2}\\|w\\|^2 + C\\sum_{i=1}^{n} \\xi_i \\quad\\text{s.t.}\\quad y_i\\,(w\\cdot x_i + b) \\ge 1 - \\xi_i,\\; \\xi_i \\ge 0',
+    symbols: [
+      { symbol: 'w', meaning: 'weight vector (normal to the decision boundary)', dimensions: '2-D (this topic); d-D in general' },
+      { symbol: 'b', meaning: 'bias / offset of the boundary w·x + b = 0', dimensions: 'scalar' },
+      { symbol: '\\xi_i', meaning: 'SLACK of point i — how far it violates the margin band y·f ≥ 1', dimensions: '≥ 0' },
+      { symbol: 'C', meaning: 'soft-margin cost — the penalty per unit of total slack Σξᵢ (C > 0)', dimensions: 'scalar, inverse-regularization dial' },
+      { symbol: '\\frac{1}{2}\\|w\\|^2', meaning: 'margin term — minimizing ‖w‖² maximizes the margin 2/‖w‖', dimensions: 'squared' },
+    ],
+    assumptions: ['Data (approximately) separable; C is finite. yᵢ ∈ {+1, −1} labels.'],
+    failureCases: ['C → ∞ with outliers → boundary chases noise (overfit)', 'C → 0 → all slack free → huge margin, everything inside the band (underfit)'],
+    derivesFrom: ['svm-hard-margin-objective'],
+    connections: ['Hinge loss', 'Slack variables', 'Convex optimization'],
+    whyWorks: 'Softening the hard constraint y·f ≥ 1 into y·f ≥ 1 − ξᵢ with a linear penalty C·Σξᵢ keeps the problem convex while allowing misclassification. C is the dial: large C demands few violations (narrow margin, low bias), small C tolerates slack (wide margin, low variance).',
+  },
+  {
+    id: 'svm-hinge-loss',
+    latex: '\\ell_{\\text{hinge}}(y, f(x)) = \\max(0,\\; 1 - y\\,f(x))',
+    symbols: [
+      { symbol: 'f(x) = w \\cdot x + b', meaning: 'model score — sign(f) is the predicted class', dimensions: 'real' },
+      { symbol: 'y \\in \\{+1, -1\\}', meaning: 'true label in the signed convention', dimensions: '±1' },
+      { symbol: 'y\\,f(x)', meaning: 'the MARGIN of the point: ≥ 1 confident-correct, in (0,1) inside the band, ≤ 0 wrong side', dimensions: 'real' },
+    ],
+    assumptions: ['Labels use the {+1, −1} convention (not {0, 1} — that silently changes the loss).'],
+    failureCases: ['y·f ≥ 1 → loss exactly 0 (the flat region — no gradient push)', 'y·f ≤ 0 → loss ≥ 1 grows LINEARLY with the violation (no quadratic blow-up like squared loss)'],
+    derivesFrom: ['svm-soft-objective'],
+    connections: ['0-1 loss', 'Logistic loss', 'Subgradient'],
+    whyWorks: 'Hinge is the tightest convex UPPER BOUND of the 0-1 loss (which is non-convex and NP-hard to minimize directly). It pays 0 once the point is past the margin, then grows linearly — so misclassified points dominate the gradient but confident points exert none.',
+  },
+  {
+    id: 'svm-slack-constraints',
+    latex: '\\xi_i = \\max(0,\\; 1 - y_i\\,f(x_i)) \\;\\Rightarrow\\; \\begin{cases} y_i\\,f(x_i) \\ge 1 & \\xi_i = 0 \\;\\text{(outside the band)} \\\\ 0 < \\xi_i < 1 & \\text{inside the band, correct side} \\\\ \\xi_i \\ge 1 & \\text{wrong side of the boundary} \\end{cases}',
+    symbols: [
+      { symbol: '\\xi_i = 0', meaning: 'point satisfies the hard-margin constraint — no penalty', dimensions: '≥ 0' },
+      { symbol: '0 < \\xi_i < 1', meaning: 'inside the margin band but correctly classified — pays a partial slack', dimensions: '(0, 1)' },
+      { symbol: '\\xi_i \\ge 1', meaning: 'misclassified — the point is on the wrong side, slack ≥ 1', dimensions: '≥ 1' },
+    ],
+    assumptions: ['ξᵢ is a non-negative slack; the solver never needs negative slack because the band y·f ≥ 1 is already one-sided.'],
+    failureCases: ['Forgetting ξᵢ ≥ 0 makes the constraint y·f ≥ 1 − ξᵢ trivially satisfiable for ANY point (ξᵢ = −10 hides any violation) — the optimum collapses to w = 0.'],
+    derivesFrom: ['svm-hinge-loss'],
+    connections: ['KKT conditions', 'Support vectors'],
+    whyWorks: 'The three slack regimes ARE the geometry of the margin band: the band is the strip 0 < y·f < 1, and ξᵢ measures exactly how deep a point sits inside it (or how far past the boundary it is).',
+  },
+  {
+    id: 'svm-margin',
+    latex: '\\gamma = \\frac{2}{\\|w\\|} \\quad\\Longleftrightarrow\\quad \\text{minimize } \\tfrac{1}{2}\\|w\\|^2 \\text{ maximizes } \\gamma',
+    symbols: [
+      { symbol: '\\gamma', meaning: 'geometric margin — distance between the two band edges f = ±1', dimensions: 'distance' },
+      { symbol: '\\|w\\|', meaning: 'L2 norm of the weights — the margin is inversely proportional to it', dimensions: 'inverse-distance' },
+      { symbol: '\\tfrac{1}{2}\\|w\\|^2', meaning: 'the margin term of the soft-margin objective', dimensions: 'squared' },
+    ],
+    assumptions: ['w scaled so the band is y·f ≥ 1 (the canonical SVM scaling; 1 is arbitrary but fixed).'],
+    failureCases: ['C small → small ‖w‖ → huge margin (band wider than the data)', 'C large → large ‖w‖ → tiny margin (band hugs the data)'],
+    derivesFrom: ['svm-soft-objective'],
+    connections: ['Geometric intuition', 'Support vectors'],
+    whyWorks: 'With w·x + b = 0 the boundary, the signed distance of point x to it is f(x)/‖w‖, so the band edges y·f = ±1 sit 1/‖w‖ from the boundary — total band width 2/‖w‖. Maximizing the margin = minimizing ‖w‖ (squared for differentiability).',
+  },
+  {
+    id: 'svm-dual-box',
+    latex: '\\max_{\\alpha}\\; \\sum_{i=1}^{n} \\alpha_i - \\frac{1}{2}\\sum_{i,j} \\alpha_i \\alpha_j\\, y_i y_j\\, (x_i \\cdot x_j) \\quad\\text{s.t.}\\quad \\sum_i \\alpha_i y_i = 0,\\;\\; 0 \\le \\alpha_i \\le C',
+    symbols: [
+      { symbol: '\\alpha_i', meaning: 'Lagrange multiplier of point i (dual variable)', dimensions: '≥ 0' },
+      { symbol: '0 \\le \\alpha_i \\le C', meaning: 'BOX constraint — the upper bound C is the soft margin\'s fingerprint (hard margin has αᵢ unbounded above)', dimensions: 'interval' },
+      { symbol: 'x_i \\cdot x_j', meaning: 'inner product — the kernel slot that later generalizes to φ(xᵢ)·φ(xⱼ)', dimensions: 'scalar' },
+    ],
+    assumptions: ['Strong duality (Slater) holds — the feasible set has a strictly-feasible point.'],
+    failureCases: ['Forgetting the upper box bound αᵢ ≤ C turns the soft-margin dual back into the hard-margin dual (no misclassification allowed).'],
+    derivesFrom: ['svm-soft-objective'],
+    connections: ['KKT conditions', 'Kernel trick'],
+    whyWorks: 'The primal is convex, so its Lagrangian dual is tight. The box bound 0 ≤ αᵢ ≤ C is the C from the primal: a point with ξᵢ > 0 saturates its multiplier at αᵢ = C, and only then can it violate the margin — this is the exact mechanism by which C caps how much a single point can bend the boundary.',
+  },
+  {
+    id: 'svm-c-lambda',
+    latex: 'C \\;\\updownarrow\\; \\frac{1}{\\lambda} \\qquad \\left(\\text{SVM } C\\text{-term} \\;\\leftrightarrow\\; \\text{ridge } \\lambda\\text{-penalty}\\right)',
+    symbols: [
+      { symbol: 'C', meaning: 'SVM soft-margin cost — LARGER C = LESS regularization (more overfit) ', dimensions: '> 0' },
+      { symbol: '\\lambda', meaning: 'ridge/lasso penalty — LARGER λ = MORE regularization (more underfit)', dimensions: '≥ 0' },
+      { symbol: '1/C', meaning: 'the effective penalty strength of the SVM objective', dimensions: '> 0' },
+    ],
+    assumptions: ['Comparing per-sample objectives; the mapping is a direction-duality, not an exact equality (hinge vs squared loss differ in shape).'],
+    failureCases: ['Treating C like λ (larger C = more regularization) inverts the whole bias–variance reading of the simulation.'],
+    derivesFrom: ['svm-soft-objective'],
+    connections: ['Ridge regression', 'Bias–variance tradeoff'],
+    whyWorks: 'Both objectives are loss + penalty: SVM is Σξᵢ + (1/C)·½‖w‖², ridge is Σ(y−ŷ)² + λ‖θ‖². So 1/C plays the role of λ: as C → ∞ the penalty vanishes (hard margin / plain OLS), as C → 0 the penalty dominates (huge margin / θ → 0).',
+  },
+];
