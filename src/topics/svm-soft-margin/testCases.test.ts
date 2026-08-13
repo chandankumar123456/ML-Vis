@@ -187,7 +187,7 @@ describe('svm-soft-margin testCases', () => {
       const w2 = snap.algorithm.w2 as number;
       const b = snap.algorithm.b as number;
       for (const pt of points) {
-        expect(c(pt.x, pt.y, merged)).toBe(w1 * pt.x + w2 * pt.y + b >= 0 ? 1 : 0);
+        expect(c(pt.x, pt.y, merged)).toBe(w1 * pt.x + w2 * pt.y + b > 0 ? 1 : 0);
       }
       // far-left → class 0, far-right → class 1 (boundary separates the clusters)
       expect(c(-10, 0, merged)).toBe(0);

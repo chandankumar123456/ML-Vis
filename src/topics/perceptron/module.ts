@@ -51,7 +51,7 @@ import { perceptronQuestions } from './questions';
 import { perceptronComparisons } from './comparisons';
 import { perceptronFailureDemos } from './failures';
 
-export interface PPoint { x: number; y: number; label: number; } // label ∈ {+1, -1}
+interface PPoint { x: number; y: number; label: number; } // label ∈ {+1, -1}
 
 // Hard backstop: the classic rule converges in O((R/γ)²) updates on separable
 // data (measured: 4 on the default seed, 23 on seed 7) and never settles on
@@ -90,7 +90,7 @@ function gaussian(rng: () => number): number {
   return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
 }
 
-export interface PerceptronData { points: PPoint[]; R: number; }
+interface PerceptronData { points: PPoint[]; R: number; }
 
 /**
  * Deterministic data. `separable: true` (default): class 0 (y = −1) clustered at
@@ -171,11 +171,11 @@ export function initWeights(p: Params): { w1: number; w2: number; b: number } {
 // ---- run plan: precomputed deterministic trajectory -------------------------
 
 /** State after update k (k ≥ 1): the weights plus which point the update fired on. */
-export interface TraceStep { w1: number; w2: number; b: number; hitIdx: number; }
+interface TraceStep { w1: number; w2: number; b: number; hitIdx: number; }
 
-export interface EpochMark { endUpdate: number; mistakes: number; } // completed epoch
+interface EpochMark { endUpdate: number; mistakes: number; } // completed epoch
 
-export interface RunPlan {
+interface RunPlan {
   paramsKey: string;
   data: PerceptronData;
   init: { w1: number; w2: number; b: number };
@@ -649,6 +649,10 @@ export const perceptronModule: TopicModule = {
     if (eta >= 1e3) issues.push('η ≥ 1000 risks numerical overflow of the weights (each update adds η·y·x)');
     if (p.separable === false && nPerClass < 4) {
       issues.push('With separable off (overlapping clusters), use nPerClass ≥ 4 so the clouds are genuinely inseparable');
+    }
+    // test-only imbalance override (failure demo); keep it in a sane range
+    if (typeof p.nClass1 === 'number' && (p.nClass1 < 2 || p.nClass1 > 200)) {
+      issues.push('nClass1 (test-only class-1 override) must be in [2, 200] — extremes would make the demo degenerate');
     }
     if (p.separable !== false && Number.isFinite(margin) && Number.isFinite(noise) && noise > 0 && margin / noise < 2.4) {
       issues.push('Noise is large relative to separation (margin/noise < 2.4): non-separability risk — the drawn clusters may not be linearly separable, ' +

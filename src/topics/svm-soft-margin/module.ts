@@ -359,7 +359,7 @@ function metricsOf(points: SvmPoint[], fit: SoftFit, evals: PointEval[], C: numb
     C, w1: fit.w1, w2: fit.w2, b: fit.b, s: fit.s,
     margin: fit.margin,
     objective: fit.objective,
-    hingeLoss: fit.slackSum,     // Σξᵢ — the unweighted slack sum
+    hingeLoss: fit.slackSum,     // Σξᵢ — alias of slackSum: slack ξᵢ ≡ hinge loss max(0, 1−y·f)
     slackSum: fit.slackSum,      // identical by construction: slack ξᵢ ≡ hinge loss
     violatedCount: violated,
     insideMarginCount: inside,
@@ -653,6 +653,6 @@ export function register() {
     const w1 = params.w1 as number;
     const w2 = params.w2 as number;
     const b = params.b as number;
-    return w1 * x + w2 * y + b >= 0 ? 1 : 0;
+    return w1 * x + w2 * y + b > 0 ? 1 : 0;
   });
 }

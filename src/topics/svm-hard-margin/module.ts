@@ -139,7 +139,12 @@ function orientedGap(points: SvmPoint[], ux0: number, uy0: number): {
       M0 = proj; p0 = pt;
     }
   }
-  return { ux: ux0, uy: uy0, gap: m1 - M0, p1: p1 as SvmPoint, p0: p0 as SvmPoint };
+  // Precondition: both classes present (generatePoints guarantees it; the guard
+  // keeps the type honest for reuse with single-class input).
+  if (p1 === null || p0 === null) {
+    return { ux: ux0, uy: uy0, gap: -Infinity, p1: points[0], p0: points[0] };
+  }
+  return { ux: ux0, uy: uy0, gap: m1 - M0, p1, p0 };
 }
 
 /**
@@ -169,6 +174,8 @@ export function supportVectorIndices(points: SvmPoint[], w1: number, w2: number,
  * EXACT (see module header). Deterministic: pair order + stable sort.
  */
 export function buildCandidates(points: SvmPoint[]): SvmCandidate[] {
+  // O(n²) point pairs × O(n) per orientedGap = O(n³); with n ≤ 40 that is
+  // ≈ 64K ops — trivially fast, computed once per params key (cached).
   const n = points.length;
   const seen = new Set<string>();
   const cands: SvmCandidate[] = [];
