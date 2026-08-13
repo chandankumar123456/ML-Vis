@@ -55,7 +55,7 @@ export const ldaQuestions: Question[] = [
     explanation:
       'LDA is SUPERVISED: its objective wᵀS_Bw/wᵀS_Ww is built from class means and per-class covariances — it needs the labels. ' +
       'PCA is UNSUPERVISED: it maximizes wᵀΣw (total variance) using only the pooled covariance, ignoring which class each point belongs to. ' +
-      'In the simulation, with the covariance tilted, the LDA axis visibly differs from the highest-variance (PCA) axis — that is the story of the sweep.',
+      'In the simulation, the J(θ) sweep curve peaks at a different angle than a variance-maximizing (PCA-style) direction would: LDA\'s optimum is where the between/within RATIO is highest, not where the variance is — that is the story of the sweep.',
     trapExplanations: {
       B: 'LDA maximizes separation, not variance — with overlapping but separable classes the variance-maximizing axis can destroy the class signal.',
       C: 'They coincide only in degenerate cases (e.g. class means aligned with the first eigenvector); in general the objectives differ (seen in the sweep).',
@@ -103,7 +103,7 @@ export const ldaQuestions: Question[] = [
     explanation:
       'J(θ) = (μ̄₁−μ̄₀)²/(s₀²+s₁²) peaks at the direction that best separates the projected means relative to within-class spread — ' +
       'the 37th (final) step evaluates the closed form w = S_W⁻¹(μ₁−μ₂) exactly, which provably maximizes J, so it sits at or above every grid point. ' +
-      'The within-class variance bars and the projected class-mean markers let you SEE why: bad axes smear the two classes together along the projection.',
+      'The projected class-mean markers and the within-class variance values s₀², s₁² (reported as metrics on each sweep step) let you SEE why: bad axes smear the two classes together along the projection — s₀²+s₁², the denominator of J, blows up.',
     trapExplanations: {
       B: 'J is not monotone over the rotation — the sweep crosses a maximum and falls again.',
       C: 'J varies strongly with direction; that variation IS the point of the sweep.',

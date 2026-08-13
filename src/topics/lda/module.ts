@@ -700,7 +700,7 @@ export const ldaModule: TopicModule = {
     revisionPriority: 'P1',
     examFrequency: 'Frequent',
     prerequisites: ['linear-algebra', 'probability', 'statistics', 'pca'],
-    relatedTopics: ['pca', 'logistic-regression', 'naive-bayes', 'svm', 'perceptron'],
+    relatedTopics: ['pca', 'logistic-regression', 'naive-bayes', 'svm-hard-margin', 'perceptron'],
     revision: { quick: '15m', standard: '45m', deep: '1.5h', mastery: '3h' },
   },
   layers: {

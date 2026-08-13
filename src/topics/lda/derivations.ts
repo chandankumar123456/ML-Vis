@@ -65,8 +65,8 @@ export const ldaDerivations: Derivation[] = [
         justification: 'With equal priors the log-ratio crosses 0 at the midpoint of the projected means. The 2-D decision boundary z = τ is a line perpendicular to ŵ, and the simulation\'s decision-boundary view renders exactly this (wx·x + wy·y + b > 0 with b = −τ).',
       },
       {
-        latex: '\\text{unequal priors: } \\tau = \\hat{w}^T \\frac{\\mu_0 + \\mu_1}{2} + \\frac{\\ln(P(C_1)/P(C_0))}{\\|\\hat{w}^T(\\mu_1-\\mu_0)\\|}',
-        justification: 'The prior ratio shifts the threshold along the axis (the log-odds intercept moves). The simulator keeps equal priors so the midpoint τ is the Bayes-optimal cut — documented so the trap question on priors has an answer.',
+        latex: '\\text{unequal priors: } \\tau = \\hat{w}^T \\frac{\\mu_0 + \\mu_1}{2} - \\frac{\\ln(P(C_1)/P(C_0))}{\\|w\\|}, \\qquad w = \\Sigma^{-1}(\\mu_1 - \\mu_0)',
+        justification: 'The prior ratio shifts the threshold along the axis (the log-odds intercept moves). With P(C₁) > P(C₀) the correction is SUBTRACTED, pushing τ toward class 0 so more of the axis is claimed by the more probable class 1. The scaling uses the norm of the UN-normalized direction w = Σ⁻¹(μ₁−μ₀), not ‖ŵᵀ(μ₁−μ₀)‖ — the two differ unless Σ ∝ I. The simulator keeps equal priors so the midpoint τ is the Bayes-optimal cut — documented so the trap question on priors has an answer.',
       },
     ],
     derivedFrom: ['lda-two-class-closed-form'],

@@ -85,34 +85,34 @@ export const ldaComparisons: Comparison[] = [
   {
     id: 'lda-vs-svm',
     title: 'LDA vs SVM (density assumption vs margin geometry)',
-    topics: ['lda', 'svm'],
+    topics: ['lda', 'svm-hard-margin'],
     axes: [
       {
         axis: 'Optimization target',
         entries: [
           { topic: 'lda', value: 'Fisher ratio J(w) = wᵀS_Bw/wᵀS_Ww — built from class means and pooled covariance' },
-          { topic: 'svm', value: 'Margin: min ½‖w‖² s.t. yᵢ(w·xᵢ+b) ≥ 1 — built from the closest boundary points only' },
+          { topic: 'svm-hard-margin', value: 'Margin: min ½‖w‖² s.t. yᵢ(w·xᵢ+b) ≥ 1 — built from the closest boundary points only' },
         ],
       },
       {
         axis: 'Data used for the boundary',
         entries: [
           { topic: 'lda', value: 'ALL points, through μ_c and S_W (mean + covariance statistics)' },
-          { topic: 'svm', value: 'ONLY support vectors (points on the margin); the rest are discarded' },
+          { topic: 'svm-hard-margin', value: 'ONLY support vectors (points on the margin); the rest are discarded' },
         ],
       },
       {
         axis: 'Assumptions',
         entries: [
           { topic: 'lda', value: 'Gaussian classes with shared covariance — a generative assumption that can be wrong' },
-          { topic: 'svm', value: 'Margin/separability geometry — distribution-free; needs no density model' },
+          { topic: 'svm-hard-margin', value: 'Margin/separability geometry — distribution-free; needs no density model' },
         ],
       },
       {
         axis: 'Class imbalance / outliers',
         entries: [
           { topic: 'lda', value: 'Means and covariances are sensitive — one outlier tilts S_W (failure demo); a majority class distorts μ' },
-          { topic: 'svm', value: 'Boundary is set by a few SVs — robust to bulk imbalance; but a single mislabeled point can hijack a hard margin (soft margin fixes it)' },
+          { topic: 'svm-hard-margin', value: 'Boundary is set by a few SVs — robust to bulk imbalance; but a single mislabeled point can hijack a hard margin (soft margin fixes it)' },
         ],
       },
     ],
