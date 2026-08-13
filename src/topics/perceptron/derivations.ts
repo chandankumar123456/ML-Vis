@@ -1,7 +1,7 @@
 // src/topics/perceptron/derivations.ts
 // All numeric claims measured against the simulator (default seed 42):
 //   4 updates on the default draw, final ‖w‖ = 2.7407, γ = 0.0472, R = 2.2446,
-//   (R·‖w*‖/γ)² ≈ 16982; seed 7 → 23 updates; non-separable → cap at 180.
+//   (R/γ)² ≈ 2261; seed 7 → 23 updates; non-separable → cap at 180.
 import type { Derivation } from '../../engine/types';
 
 export const perceptronDerivations: Derivation[] = [
@@ -30,27 +30,27 @@ export const perceptronDerivations: Derivation[] = [
   },
   {
     id: 'perceptron-novikoff-bound',
-    title: 'The Convergence Theorem: updates ≤ (R·‖w*‖/γ)²',
+    title: 'The Convergence Theorem: updates ≤ (R/γ)²',
     steps: [
       {
-        latex: '\\|w_k\\| \\le \\eta R \\cdot k',
-        justification: 'Start w₀ = 0. Each of the k updates so far added a vector η·yᵢ·xᵢ of length ≤ ηR; by the triangle inequality the total norm is at most k·ηR. This bound holds no matter which points triggered the updates.',
+        latex: '\\|w_{k+1}\\|^2 = \\|w_k + \\eta\\, y_i x_i\\|^2 = \\|w_k\\|^2 + 2\\eta\\, y_i (w_k \\cdot x_i) + \\eta^2 \\|x_i\\|^2 \\le \\|w_k\\|^2 + \\eta^2 R^2',
+        justification: 'Expand the square of the update w_{k+1} = w_k + η·yᵢ·xᵢ. The update fires ONLY on a MISTAKE, where yᵢ·(w_k·xᵢ) ≤ 0 — so the cross term 2η·yᵢ(w_k·xᵢ) is non-positive and can be dropped. The remaining term is bounded by η²·‖xᵢ‖² ≤ η²R² because every point lies inside the data radius R = max‖x‖. Correct points never touch w, so this single-step bound holds for every update.',
+      },
+      {
+        latex: '\\|w_k\\|^2 \\le k\\, \\eta^2 R^2 \\qquad (\\|w_0\\| = 0; \\; \\text{sum the recursion over } k \\text{ updates})',
+        justification: 'Telescope the step-1 recursion from the zero start w₀ = 0: each of the first k updates adds at most η²R² to the squared norm, so ‖w_k‖² ≤ k·η²R² — the norm grows like O(√k), NOT like the loose k·ηR triangle bound. This tighter bound is exactly what makes the sandwich in step 4 cancel cleanly.',
       },
       {
         latex: 'w^* \\cdot w_k \\ge \\eta\\, \\gamma \\, \\|w^*\\| \\cdot k',
         justification: 'Let w* be the separator the rule converges to and γ its geometric margin, so yᵢ(w*·xᵢ+b*) ≥ γ‖w*‖ for every point. Each update adds η·yᵢ·xᵢ to w_k, contributing w*·(η·yᵢ·xᵢ) = η·yᵢ·(w*·xᵢ) ≥ η·γ‖w*‖ — so after k updates the dot product w*·w_k grew by at least η·γ‖w*‖ per update.',
       },
       {
-        latex: 'w^* \\cdot w_k \\le \\|w^*\\|\\, \\|w_k\\| \\le \\|w^*\\| \\cdot \\eta R k',
-        justification: 'Cauchy–Schwarz bounds the dot product by the product of norms; substituting the step-1 norm bound gives an UPPER bound on the same dot product — the dot product cannot both be ≥ ηγ‖w*‖k and ≤ ηR‖w*‖k unless γ ≤ R, i.e. the data radius is at least the margin. So far this is a consistency check, not the theorem.',
-      },
-      {
-        latex: '\\|w^*\\|^2 \\, (\\eta\\gamma k)^2 \\le (w^* \\cdot w_k)^2 \\le \\|w^*\\|^2 \\|w_k\\|^2 \\le \\|w^*\\|^2 \\, (\\eta R k)^2 \\;\\Rightarrow\\; k \\le \\left(\\frac{R}{\\gamma}\\right)^2',
-        justification: 'The tighter route squares the two inequalities and cancels the common factor: the Cauchy–Schwarz sandwich forces k ≤ (R/γ)². Written for an unnormalized separator this is updates ≤ (R·‖w*‖/γ)² — the exact form the plan prescribes. Measured on the default seed: (2.2446·2.7407/0.0472)² ≈ 16982 while the run took 4 updates — the bound is a worst-case guarantee, not a prediction.',
+        latex: '(\\eta\\gamma\\|w^*\\|\\, k)^2 \\le (w^* \\cdot w_k)^2 \\le \\|w^*\\|^2\\, \\|w_k\\|^2 \\le \\|w^*\\|^2 \\, k\\, \\eta^2 R^2 \\;\\Rightarrow\\; k \\le \\left(\\frac{R}{\\gamma}\\right)^2',
+        justification: 'The LEFT inequality squares the step-3 lower bound (both sides are non-negative, so squaring preserves the order). The RIGHT side chains Cauchy–Schwarz, (w*·w_k)² ≤ ‖w*‖²‖w_k‖², with the step-2 norm bound ‖w_k‖² ≤ k·η²R². The chain forces (ηγ‖w*‖k)² ≤ ‖w*‖²kη²R²; cancelling the common factor η²‖w*‖²k leaves γ²k ≤ R², i.e. k ≤ (R/γ)² — the Novikoff bound, with γ the GEOMETRIC margin of the separator. Measured on the default seed: (2.2446/0.0472)² ≈ 2261 while the run took 4 updates — the bound is a worst-case guarantee, not a prediction.',
       },
       {
         latex: '\\text{separable } \\Rightarrow\\; \\gamma > 0 \\;\\Rightarrow\\; k \\le \\left(\\frac{R}{\\gamma}\\right)^2 < \\infty \\;\\Rightarrow\\; \\text{the rule terminates}',
-        justification: 'The key inference: separability makes γ > 0 feasible, which makes the bound FINITE — the perceptron cannot cycle forever on separable data. Contrapositive: a run that never settles is CERTIFICATE that the data is not linearly separable, which is exactly what the simulator reports honestly via the oscillation cap.',
+        justification: 'The key inference: separability makes γ > 0 feasible, which makes the bound FINITE — the perceptron cannot cycle forever on separable data. Contrapositive: a run that provably repeats a weight state is CERTIFICATE that the data is not linearly separable. The simulator reports non-convergence honestly — an exact cycle is the definitive certificate; the oscillation cap alone only says the run did not settle within the budget (a separable draw could in principle need more updates than the cap).',
       },
     ],
     derivedFrom: ['perceptron-convergence-bound', 'perceptron-geometric-margin'],

@@ -42,7 +42,7 @@ export const perceptronQuestions: Question[] = [
       'It is guaranteed to converge for any training data, separable or not',
     ],
     answer: 'A',
-    explanation: 'Novikoff\'s theorem: if some (w*, b*) separates the data (so the geometric margin γ > 0 exists) then the fixed-increment rule converges after at most (R·‖w*‖/γ)² updates. Measured on the default seed: 4 updates (seed 7: 23), against a bound of ≈ 16982. The result is the perceptron\'s one great guarantee — but it is only as strong as the separability assumption.',
+    explanation: 'Novikoff\'s theorem: if some (w*, b*) separates the data (so the geometric margin γ > 0 exists) then the fixed-increment rule converges after at most (R/γ)² updates. Measured on the default seed: 4 updates (seed 7: 23), against a bound of ≈ 2261. The result is the perceptron\'s one great guarantee — but it is only as strong as the separability assumption.',
     trapExplanations: {
       B: 'The perceptron converges to SOME separator — whichever the update order produces. Maximizing the margin is the SVM\'s job, and the perceptron never does it (its final γ = 0.047 is far from the max-margin value).',
       C: 'A decaying rate changes the final weights\' scale but not the mistake sequence; the classic rule has a single fixed η and still converges on separable data.',

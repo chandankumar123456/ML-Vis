@@ -11,7 +11,7 @@ import type { TestCase, ParamValue } from '../../engine/types';
 // Case-level interpretation of the plan's 4 prescribed tests:
 //  - Case 1 (converges within bounded iterations): asserted at run level here
 //    (final accuracy 1, mistakesPerEpoch 0, updates under a generous explicit
-//    bound) and against the (R·‖w*‖/γ)² theorem bound in testCases.test.ts.
+//    bound) and against the (R/γ)² theorem bound in testCases.test.ts.
 //  - Case 2 (oscillation on non-separable data): run level asserts converged:
 //    false + the honest telemetry (failedAtStep 181, reason mentions
 //    oscillation on seed 42); the oscillation semantics are unit-tested in
@@ -27,7 +27,7 @@ export const perceptronTestCases: TestCase[] = [
     // Plan case 1: linearly separable clusters (margin 1.2, σ 0.5, seed 42) →
     // zero train error within a GENEROUS explicit bound on the default seed.
     // Measured on the default seed: 4 updates — far below the theorem bound
-    // (R·‖w*‖/γ)² ≈ 16982 for the separator the algorithm actually finds.
+    // (R/γ)² ≈ 2261 (Novikoff, geometric margin).
     name: 'converges on linearly separable data with zero train error within a bounded iteration count',
     params: { nPerClass: 20, margin: 1.2, noise: 0.5, eta: 1, init: 'zero', seed: 42, separable: true },
     maxSteps: 300,

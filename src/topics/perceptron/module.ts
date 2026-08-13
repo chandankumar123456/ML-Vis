@@ -20,9 +20,10 @@
 //    getSweep precedent): initialState/step are O(1) per call, runs are
 //    deterministic, and the classifier fallback reuses the same plan's final
 //    weights. MAX_UPDATES (5000) is the hard backstop: nothing ever hangs.
-//  - NON-SEPARABLE data (`separable: false`) draws BOTH Gaussian clusters at the
-//    origin (fully overlapping clouds — maximally non-separable; the margin and
-//    noise sliders keep their meaning for the separable case). The classic
+//  - NON-SEPARABLE data (`separable: false`) keeps class 0 centered at −margin
+//    and moves only class 1 to the origin — heavily overlapping clouds, not
+//    linearly separable (the margin and noise sliders keep their meaning for the
+//    separable case). The classic
 //    cycling phenomenon applies: the weight state (w1,w2,b,pos) — which fully
 //    determines the next scan — repeats exactly (each update adds ±η·yᵢ·xᵢ, so a
 //    repeated update sequence reproduces bit-identical floats). getPlan detects
@@ -34,8 +35,8 @@
 //    scale-invariant (y·(w·x+b) ≤ 0 ⟺ y·(ηw·x+ηb) ≤ 0 for η > 0), so the update
 //    COUNT is identical for every η > 0 from zero init (asserted in
 //    testCases.test.ts); the final weights scale exactly by η. The
-//    convergence-theorem bound updates ≤ (R·‖w*‖/γ)² is computed from MEASURED
-//    R, ‖w*‖, γ and asserted.
+//    convergence-theorem bound updates ≤ (R/γ)² is computed from MEASURED R
+//    and γ (the geometric margin) and asserted.
 //  - No loss function exists: the perceptron does NOT minimize one (updates fire
 //    ONLY on mistakes). lossMetricKey = 'mistakesPerEpoch' is a diagnostic
 //    (lower-better) and the loss-curve layer is titled accordingly.
@@ -63,8 +64,9 @@ export const MAX_UPDATES = 5000;
 // (measured: none within MAX_UPDATES on the default overlapping clouds — the
 // classical cycling theorem proves oscillation, but the exact float period can
 // far exceed any runnable bound). The honest demo bound is therefore a SNAPSHOT
-// CAP: a non-converging run terminates after OSCILLATION_CAP updates (≈ 182
-// snapshots incl. init/converge, under the plan's ~200 cap) with an honest
+// CAP: a non-converging run terminates after OSCILLATION_CAP updates (181
+// snapshots: init + 180 updates, no converge re-emission on non-separable
+// runs — under the plan's ~200 cap) with an honest
 // oscillation telemetry message. An exact cycle, when it fires (keys on some
 // seeds), still terminates early with the precise period.
 export const OSCILLATION_CAP = 180;
@@ -93,10 +95,11 @@ export interface PerceptronData { points: PPoint[]; R: number; }
 /**
  * Deterministic data. `separable: true` (default): class 0 (y = −1) clustered at
  * (−margin, 0), class 1 (y = +1) at (+margin, 0), each point jittered by
- * N(0, noise) — near-surely linearly separable at the supported slider range
- * (margin ≥ 0.9, noise ≤ 0.6 on the default seed). `separable: false`: BOTH
- * clusters centered at the origin — fully overlapping clouds, not linearly
- * separable with probability ~1 for n ≥ 4 points in general position.
+  * N(0, noise) — near-surely linearly separable at the supported slider range
+  * (margin ≥ 0.9, noise ≤ 0.6 on the default seed). `separable: false`: class 0
+  * stays centered at −margin, only class 1 moves to the origin — heavily
+  * overlapping clouds, not linearly separable with probability ~1 for n ≥ 4
+  * points in general position.
  * R = maxᵢ‖xᵢ‖ is the data-radius input to the convergence-theorem bound.
  * Fixed point ORDER: class 0 first (indices 0..nPerClass−1), class 1 after
  * (nPerClass..‥) — the scan order and therefore the update sequence are
@@ -113,7 +116,7 @@ export function generateData(p: Params): PerceptronData {
   for (let i = 0; i < nPerClass; i++) {
     points.push({ x: -margin + gaussian(rng) * noise, y: gaussian(rng) * noise, label: -1 });
   }
-  const c1x = separable ? margin : 0; // overlapping toggle → class 1 at origin too
+  const c1x = separable ? margin : 0; // non-separable: class 1 at the origin (class 0 stays at −margin)
   for (let i = 0; i < nClass1; i++) {
     points.push({ x: c1x + gaussian(rng) * noise, y: gaussian(rng) * noise, label: +1 });
   }
@@ -185,7 +188,7 @@ export interface RunPlan {
   finalW: { w1: number; w2: number; b: number };
   finalGamma: number;              // geometric margin at termination (0 if ‖w‖ = 0)
   finalAccuracy: number;
-  bound: number;                   // (R·‖w*‖/γ)² theorem bound at the final solution
+  bound: number;                   // (R/γ)² Novikoff theorem bound at the final solution
 }
 
 function weightOutcome(data: PerceptronData, w1: number, w2: number, b: number) {
@@ -302,8 +305,7 @@ export function buildPlan(p: Params): RunPlan {
   // Clean rotation (clean-sweep epoch mark) — or the non-separable cap fired /
   // backstop hit (no exact cycle within the runnable bound → updates == cap).
   const out = weightOutcome(data, w1, w2, b);
-  const norm = Math.hypot(w1, w2);
-  const bound = out.gamma > 1e-12 ? (data.R * norm / out.gamma) ** 2 : NaN;
+  const bound = out.gamma > 1e-12 ? (data.R / out.gamma) ** 2 : NaN;
   return {
     paramsKey: paramsKey(p), data, init, trace, updates: totalUpdates,
     converged: !stoppedByCap && totalUpdates < MAX_UPDATES,
@@ -417,7 +419,7 @@ function snapshotAt(
       type: 'oscillation',
       label: plan.cycleLength > 0
         ? `oscillation: weight state repeats every ${plan.cycleLength} updates — never converges`
-        : `oscillation: still making mistakes after ${plan.updates} updates — never converges`,
+        : `oscillation: still making mistakes after ${plan.updates} updates — run capped (the data may not be linearly separable, or convergence needs more updates)`,
       step: updates,
     });
   }
@@ -441,8 +443,8 @@ function snapshotAt(
     narration = `Epoch ${epoch} completed with 0 updates — CONVERGED in ${updates} updates. ${wStr} — ` +
       `accuracy ${(m.accuracy * 100).toFixed(1)}%, ‖w‖ = ${m.normW.toFixed(3)}, geometric margin γ = ${m.gamma.toFixed(3)}`;
     why.push(`A full clean sweep: every point was correctly classified at its visit, and since no update fired, no weight ` +
-      `changed — so every point is correct everywhere. The convergence-theorem bound (R·‖w*‖/γ)² = ` +
-      `${Number.isFinite(plan.bound) ? plan.bound.toFixed(0) : '∞'} (measured R = ${plan.data.R.toFixed(3)}, ‖w*‖ = ${m.normW.toFixed(3)}, ` +
+      `changed — so every point is correct everywhere. The convergence-theorem bound (R/γ)² = ` +
+      `${Number.isFinite(plan.bound) ? plan.bound.toFixed(0) : '∞'} (measured R = ${plan.data.R.toFixed(3)}, ` +
       `γ = ${m.gamma.toFixed(3)}) is loose as theory predicts: ${updates} updates ≪ bound.`);
     changed.push('converged — clean sweep, 0 mistakes this epoch', `‖w‖ = ${m.normW.toFixed(3)}`, `γ = ${m.gamma.toFixed(3)}`);
   } else {
@@ -537,16 +539,19 @@ export const simulation = {
         es.epoch, plan.updates, 0, false, 'converge');
     }
     // Non-separable: the run has reached the oscillation verdict (exact cycle
-    // repeat, or the OSCILLATION_CAP) → honest failure via telemetry.
+    // repeat, or the OSCILLATION_CAP) → honest failure via telemetry. An exact
+    // cycle is the definitive oscillation signal; the CAP alone only says the
+    // run did not settle within the budget — the draw may still be separable
+    // and simply need more updates than the cap.
     const cycle = plan.cycleLength > 0
       ? `the weight state (w1, w2, b, scan position) at update ${plan.cycleStart} repeats exactly at update ${plan.updates} ` +
         `(cycle length ${plan.cycleLength}) — the boundary cycles forever`
       : `after ${plan.updates} updates the weights are still changing (mistakes fire on every epoch; no exact cycle within the ` +
-        `runnable bound — the classical cycling theorem says oscillation is guaranteed, but the exact float period exceeds it)`;
-    throw new Error(
-      `perceptron does not converge on non-separable data: oscillation detected — ${cycle}. ` +
-      `The data is not linearly separable — enable "Separable data" or increase "margin".`,
-    );
+        `runnable bound — the draw may be genuinely non-separable or merely slow to converge)`;
+    const verdict = plan.cycleLength > 0
+      ? 'the data is not linearly separable — the exact weight-state cycle is the classical proof\'s definitive oscillation signal'
+      : `the run stopped after ${plan.updates} updates — the data is likely not linearly separable, or convergence requires more updates than the cap`;
+    throw new Error(`perceptron does not converge: oscillation detected — ${cycle}. ${verdict}.`);
   },
 };
 
@@ -641,7 +646,7 @@ export const perceptronModule: TopicModule = {
     if (!Number.isFinite(margin) || margin < 0) issues.push('margin must be non-negative (the signed cluster-center offset)');
     if (!Number.isFinite(noise) || noise <= 0) issues.push('noise (cluster spread σ) must be positive');
     if (!Number.isFinite(eta) || eta <= 0) issues.push('Learning rate η must be positive');
-    if (eta > 1e3) issues.push('η > 1000 risks numerical overflow of the weights (each update adds η·y·x)');
+    if (eta >= 1e3) issues.push('η ≥ 1000 risks numerical overflow of the weights (each update adds η·y·x)');
     if (p.separable === false && nPerClass < 4) {
       issues.push('With separable off (overlapping clusters), use nPerClass ≥ 4 so the clouds are genuinely inseparable');
     }

@@ -17,7 +17,7 @@ export const perceptronComparisons: Comparison[] = [
       {
         axis: 'Convergence / solution',
         entries: [
-          { topic: 'perceptron', value: 'Converges in ≤ (R‖w*‖/γ)² updates IF separable — measured 4 updates on the default seed, γ = 0.047 (an arbitrary separator)' },
+          { topic: 'perceptron', value: 'Converges in ≤ (R/γ)² updates IF separable (Novikoff) — measured 4 updates on the default seed, γ = 0.047 (an arbitrary separator)' },
           { topic: 'svm-hard-margin', value: 'The unique max-margin line — measured margin 1.276 on the SVM default, the same data the perceptron leaves with γ = 0.047' },
         ],
       },
@@ -117,6 +117,45 @@ export const perceptronComparisons: Comparison[] = [
     notes: [
       'Perceptron trades away expressiveness for a tiny model and O(1) inference; k-NN trades away training to keep the raw data. Perceptron generalizes only if the true boundary is (near-)linear; k-NN adapts to any boundary but pays per prediction.',
       'Both are classic Wave-1 baselines: the perceptron is the ancestor of deep linear layers, k-NN is the default non-parametric baseline.',
+    ],
+  },
+  {
+    id: 'perceptron-vs-sgd',
+    title: 'Perceptron vs Gradient Descent (mistake-correction vs gradient descent)',
+    topics: ['perceptron', 'gradient-descent'],
+    axes: [
+      {
+        axis: 'Update trigger',
+        entries: [
+          { topic: 'perceptron', value: 'Mistake-driven: w ← w + η·yᵢ·xᵢ fires ONLY when yᵢ·(w·xᵢ+b) ≤ 0 — correct points are examined and skipped (measured: 4 updates on the default seed)' },
+          { topic: 'gradient-descent', value: 'Gradient-driven: steps x ← x − η·∇f(x) on EVERY iteration — no mistake condition; the run advances as long as the gradient is non-zero' },
+        ],
+      },
+      {
+        axis: 'Objective',
+        entries: [
+          { topic: 'perceptron', value: 'No loss function is minimized — a pure correction rule; the 0-1 error it targets has gradient 0 almost everywhere, so no gradient could drive it' },
+          { topic: 'gradient-descent', value: 'Minimizes an explicit loss f(x) by following −∇f; "convergence" means the gradient is ≈ 0 (a minimum), not that the data is separated' },
+        ],
+      },
+      {
+        axis: 'Learning-rate role',
+        entries: [
+          { topic: 'perceptron', value: 'η is inert in the classic rule (η-invariance: measured 4 updates for both η = 1 and η = 0.5) — it only scales the final weights' },
+          { topic: 'gradient-descent', value: 'η IS the step size: too large → overshoot/divergence, too small → glacial progress; tuning it is the central practical skill' },
+        ],
+      },
+      {
+        axis: 'Data usage (online vs batch)',
+        entries: [
+          { topic: 'perceptron', value: 'Online: ONE point per update — the point whose mistake fired; the final w is the running sum of past mistakes' },
+          { topic: 'gradient-descent', value: 'Batch: the gradient averages over the whole objective, so each step sees every point (full-batch); per-example "stochastic" GD is the online variant' },
+        ],
+      },
+    ],
+    notes: [
+      'The perceptron update LOOKS like an SGD step but is not a gradient step: no loss, no gradient, updates only on mistakes, never shrinks the weights. GD on a smooth loss updates on every point, has a real objective, and is critically η-dependent — exactly the properties the perceptron lacks.',
+      'The historical bridge: the perceptron is the ancestor of SGD-trained neural networks; modern "perceptron as SGD" readings bolt on a surrogate loss the classic rule never had.',
     ],
   },
 ];

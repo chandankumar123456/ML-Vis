@@ -1,11 +1,11 @@
 // src/topics/perceptron/formulas.ts
 // Measured anchors (nPerClass 20, margin 1.2, noise 0.5, η 1, zero init, seed 42 —
 // the default):
-//   R = max‖x‖ relative to the centroid = 2.2446
+//   R = max‖x‖ relative to the origin = 2.2446
 //   converges in 4 updates; 6 snapshots (init + 4 updates + converged re-emission)
 //   final w = (2.7135, 0.3850), b = 0, ‖w‖ = 2.7407 — well under 2R ≈ 4.489
 //   geometric margin of the found separator γ = min y·(w·x+b)/‖w‖ = 0.0472
-//   convergence bound (R·‖w*‖/γ)² ≈ 16982 vs 4 actual updates (the bound is loose)
+//   convergence bound (R/γ)² ≈ 2261 vs 4 actual updates (the bound is loose)
 //   per-update ‖Δw‖ ≤ η·√(R²+1) = 2.457; measured max ‖Δw‖ = 1.958 (incl. bias)
 //   seed 7: 23 updates. Non-separable (separable: false): cap at 180 updates.
 //   η-invariance: η = 1 and η = 0.5 both take exactly 4 updates; weights scale ×2.
@@ -61,19 +61,18 @@ export const perceptronFormulas: Formula[] = [
   },
   {
     id: 'perceptron-convergence-bound',
-    latex: '\\text{updates} \\;\\le\\; \\left( \\frac{R\\,\\|w^*\\|}{\\gamma} \\right)^2',
+    latex: '\\text{updates} \\;\\le\\; \\left( \\frac{R}{\\gamma} \\right)^2',
     symbols: [
-      { symbol: 'R', meaning: 'data radius — max‖x‖ over the training set (measured 2.2446 on the default draw)', dimensions: 'feature units' },
-      { symbol: 'w^*', meaning: 'the separator the rule actually converges to (or any separating solution) — its norm does the bookkeeping', dimensions: 'per feature unit' },
-      { symbol: '\\gamma', meaning: 'geometric margin of w* — the clearance of the closest point (measured 0.0472 on the default separator)', dimensions: 'feature units' },
-      { symbol: '\\left(\\frac{R\\,\\|w^*\\|}{\\gamma}\\right)^2', meaning: 'Novikoff bound: the number of mistake updates is at most this — a FINITE bound whenever separable data makes γ > 0 feasible', dimensions: 'count' },
+      { symbol: 'R', meaning: 'data radius — max‖x‖ over the training set, measured from the ORIGIN (measured 2.2446 on the default draw)', dimensions: 'feature units' },
+      { symbol: '\\gamma', meaning: 'geometric margin of the separator the rule converges to — the clearance of its closest point (measured 0.0472 on the default separator)', dimensions: 'feature units' },
+      { symbol: '\\left(\\frac{R}{\\gamma}\\right)^2', meaning: 'Novikoff bound: the number of mistake updates is at most this — a FINITE bound whenever separable data makes γ > 0 feasible', dimensions: 'count' },
     ],
     assumptions: ['Linearly separable data: some (w, b) classifies every point correctly ⇒ the classic fixed-increment rule CONVERGES', 'Fixed learning rate η (the bound is η-independent, matching the measured η-invariance)'],
-    failureCases: ['For NON-separable data γ does not exist for any separator and the bound is meaningless — the rule enters a cycle instead (the classical cycling theorem; the simulator caps this at 180 updates with honest telemetry)', 'The bound is typically enormous: on the default run it evaluates to ≈ 16982 updates while the rule takes 4 — reading the bound as a performance PREDICTION is a common mistake; it is a worst-case guarantee'],
+    failureCases: ['For NON-separable data γ does not exist for any separator and the bound is meaningless — the rule enters a cycle instead (the classical cycling theorem; the simulator caps this at 180 updates with honest telemetry)', 'The bound is typically enormous: on the default run it evaluates to ≈ 2261 updates while the rule takes 4 — reading the bound as a performance PREDICTION is a common mistake; it is a worst-case guarantee'],
     derivesFrom: ['perceptron-geometric-margin', 'perceptron-update'],
     derivationIds: ['perceptron-novikoff-bound'],
     connections: ['Perceptron convergence theorem (Novikoff 1962)', 'Margin-based generalization bounds (same R/γ structure)', 'SVM margin'],
-    whyWorks: 'The bound is the perceptron\'s core guarantee: IF the data is linearly separable (γ > 0 achievable, R finite) THEN the rule makes at most (R‖w*‖/γ)² updates and then classifies perfectly — no learning-rate tuning needed, no local minima. Measured on the default seed: 4 updates ≈ 0.02% of the bound; on seed 7: 23. On non-separable data the theorem does NOT apply and the rule provably cycles — the simulator\'s honest cap demonstrates that exact failure mode.',
+    whyWorks: 'The bound is the perceptron\'s core guarantee: IF the data is linearly separable (γ > 0 achievable, R finite) THEN the rule makes at most (R/γ)² updates and then classifies perfectly — no learning-rate tuning needed, no local minima. Measured on the default seed: 4 updates ≈ 0.18% of the bound (2260.8); on seed 7: 23. On non-separable data the theorem does NOT apply and the rule provably cycles — the simulator\'s honest cap demonstrates that exact failure mode.',
   },
   {
     id: 'perceptron-eta-invariance',

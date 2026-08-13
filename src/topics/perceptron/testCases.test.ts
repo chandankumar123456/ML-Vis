@@ -13,7 +13,7 @@ import { getClassifier } from '../../registry/viewRegistry';
 //   default separable (nPerClass 20, margin 1.2, noise 0.5, η 1, zero init, seed 42):
 //     R = 2.244588, converges in 4 UPDATEs (accuracy 1, γ = 0.047207),
 //     final w = (2.713533, 0.385045), b = 0, ‖w‖ = 2.740716 (< 2R ≈ 4.489),
-//     theorem bound (R·‖w*‖/γ)² = 16981.816 — 4 updates, 4245× under the bound
+//     theorem bound (R/γ)² = 2260.769 — 4 updates, 565× under the bound
 //     run = 6 snapshots (init + 4 updates + converged), epochMarks [{3:2},{4:0}]
 //     max per-update ‖Δw‖ (3D, incl. bias) = 1.958212 ≤ η·√(R²+1) = 2.457270
 //   non-separable (separable: false, seed 42): NO exact cycle within MAX_UPDATES
@@ -67,14 +67,14 @@ describe('perceptron testCases (data-driven)', () => {
 });
 
 describe('perceptron: plan case 1 — converges on separable data (measured)', () => {
-  it('zero train error within the (R·‖w*‖/γ)² theorem bound — 4 updates ≪ 16982', () => {
+  it('zero train error within the (R/γ)² theorem bound — 4 updates ≪ 2261', () => {
     const plan = buildPlan(DEFAULT);
     expect(plan.converged).toBe(true);
     expect(plan.finalAccuracy).toBe(1);
     expect(plan.updates).toBe(4);
-    // the theorem bound built from the MEASURED final separator must hold and
-    // be loose: updates ≤ (R·‖w*‖/γ)² = 16981.816
-    expect(plan.bound).toBeCloseTo(16981.816, 1);
+    // the theorem bound built from the MEASURED R and γ must hold and be loose:
+    // updates ≤ (R/γ)² = 2260.769 (Novikoff bound, geometric margin γ)
+    expect(plan.bound).toBeCloseTo(2260.769, 1);
     expect(plan.updates).toBeLessThanOrEqual(plan.bound);
     // the converged separator really separates: geometric margin > 0
     expect(plan.finalGamma).toBeGreaterThan(0);
@@ -284,18 +284,38 @@ describe('perceptron: determinism + η invariance (measured)', () => {
   });
 });
 
+describe('perceptron: random init (scale 0.1, measured)', () => {
+  it('small seeded random start converges in 2 updates with accuracy 1 (header-documented anchor)', () => {
+    const p = { ...DEFAULT, init: 'random' as const };
+    const plan = buildPlan(p);
+    // measured: init weights from mulberry32(seed+1) × scale 0.1 — all inside ±0.1
+    expect(Math.max(Math.abs(plan.init.w1), Math.abs(plan.init.w2), Math.abs(plan.init.b))).toBeLessThanOrEqual(0.1);
+    expect(plan.converged).toBe(true);
+    expect(plan.finalAccuracy).toBe(1);
+    expect(plan.updates).toBe(2); // measured (the small random start skips the d0 detour)
+    const run = computeRun(simulation, p, 300);
+    expect(run.telemetry.failedAtStep).toBeUndefined();
+    expect(run.snapshots).toHaveLength(4); // init + 2 updates + converged re-emission
+    expect(run.snapshots[run.snapshots.length - 1].metrics.mistakes).toBe(2);
+  });
+});
+
 describe('perceptron: validateParams', () => {
   it('accepts the default parameter set', () => {
     expect(perceptronModule.validateParams?.(DEFAULT) ?? []).toHaveLength(0);
   });
 
-  it('rejects η ≤ 0 (the update is undefined for η = 0 in classic form) and η > 1000 (overflow risk)', () => {
+  it('rejects η ≤ 0 (the update is undefined for η = 0 in classic form) and η ≥ 1000 (overflow risk)', () => {
     const e0 = perceptronModule.validateParams?.({ ...DEFAULT, eta: 0 }) ?? [];
     expect(e0.some((s) => /η must be positive/.test(s))).toBe(true);
     const en = perceptronModule.validateParams?.({ ...DEFAULT, eta: -1 }) ?? [];
     expect(en.some((s) => /η must be positive/.test(s))).toBe(true);
     const huge = perceptronModule.validateParams?.({ ...DEFAULT, eta: 1e6 }) ?? [];
     expect(huge.some((s) => /risk/.test(s))).toBe(true);
+    // the F3 failure demo uses exactly η = 1000 and documents a validator flag —
+    // the boundary is INCLUSIVE: η ≥ 1000 is flagged (measured; see the demo)
+    const boundary = perceptronModule.validateParams?.({ ...DEFAULT, eta: 1000 }) ?? [];
+    expect(boundary.some((s) => /risk/.test(s))).toBe(true);
   });
 
   it('rejects nPerClass < 2 and non-positive noise/margin', () => {
