@@ -448,7 +448,9 @@ Failures: correlated features (double counting evidence); rare events (zero coun
 
 ---
 
-## Wave 3 — Geometry cluster (4 topics)
+## Wave 3 — Geometry cluster (4 topics) ✅ COMPLETE
+
+All four topics shipped (`430f1bd`, `d450c5e`, `293acad`, `58534ba`); review cycle closed (12 reviews — spec ×4, quality ×4, closure re-reviews ×4; fixes `cfb3f8f`/`e9dd50c`/`a1b82b9`/`5ea33d8` + hardening `97ed465`); suite 384/384 (32 files), lint, build, e2e 3/3. No new registry components — all four topics reuse the existing registered views (incl. decision-boundary + classifier registry). See per-task drift/SHIPPED notes below.
 
 ### Task 11: svm-hard-margin
 
@@ -474,6 +476,9 @@ Comparisons: vs perceptron (any separator vs max margin), vs logistic (probabili
 
 Failures: non-separable data (hard margin fails → soft margin); outliers (single outlier forces tiny margin).
 
+> **Plan drift (Task 11):** (1) EXACT 2D geometric solver — candidate-direction enumeration (2 SVs → ŵ ∥ cross-class segment; 3 SVs → ŵ ⟂ same-class segment); per direction gap = min₁(ŵ·x) − max₀(ŵ·x), w = 2ŵ/gap so margin = gap; global optimum = largest-gap candidate (exact, deterministic; all-pairs superset of the plan's "max over pairs of boundary points"). (2) run = top-40 candidate sweep (SWEEP_CAP) weakest→strongest margin, lossMetricKey ½‖w‖² non-increasing 1.240917→1.227584, final snapshot = exact optimum (asserted to 9 decimals). (3) bounded deterministic seed search for separability (plan unspecified) — telemetry failure with "separable" in the reason when 200 seeds fail; tight/noisy in-range draws may advance past the requested seed (documented; failures.ts). (4) `scale` is test-only, no slider. (5) plan's "scaling by 2 doubles ‖w‖" framing corrected: scaling data UP by 2 HALVES ‖w‖ (features numerically larger → smaller weights suffice); the doubling direction is delivered via scale 0.5; margin·‖w‖ = 2 invariant exact in every case. Measured anchors: default w=(1.519692, 0.381713), b=−0.230105, ‖w‖=1.566898, margin=1.276408, SVs=[9,21]; seed 7: SVs=[0,14,22], margin 1.364655; boundary 14.1° off vertical.
+> SHIPPED: `430f1bd` (feat, 9 files, 22 tests) → reviews: spec APPROVED-WITH-NITS (3 comment-level nits: seed-search header claim, "MINIMUM effective constraints" superlative, "weakest feasible separator" vs top-40 slice) → fixes `cfb3f8f` → closure: all 3 CLOSED; quality APPROVE (classifier tie-break aligned with sibling + orientedGap guard → `97ed465`).
+
 ### Task 12: svm-soft-margin
 
 **Files:** `src/topics/svm-soft-margin/{...}.ts`
@@ -495,6 +500,9 @@ Mistakes: thinking C ↑ always better; confusing slack with hinge loss; forgett
 Comparisons: vs hard margin (limit), vs logistic regression (loss shape), vs ridge (C ↔ λ duality).
 
 Failures: C→∞ with outliers (overfit noise); C→0 (underfit); label noise.
+
+> **Plan drift (Task 12):** (1) deterministic geometric solver instead of QP — orientation grid + exact hinge-offset minimizer + golden-section scale/θ; C→∞ reproduces an independent exhaustive hard-margin reference to rel. diff 8.6e-6 / angle 0.017°. (2) plan's "C log-slider" delivered as linear slider + log-spaced C_GRID sweep in the run (one snapshot per grid value ≤ slider C; final snapshot = slider C exactly; lossMetricKey 'objective' + lossMetricKey2 'hingeLoss' dual series — hingeLoss ≡ slackSum by construction, alias documented). (3) measured behavior corrected the textbook story: a deep outlier is ABSORBED by slack even at C=1000 (boundary unchanged, C·Σξ = 99.99% of the objective — box constraint αᵢ ≤ C caps single-point influence); boundary distortion happens at SMALL C (label-noise demo moved to C=1, ‖Δw‖≈0.14); C=0.01: 19/20 points pay slack, 5 misclassified, margin 6.80 vs 2.21 (underfit end). (4) metric `freeSupportCount` (free SVs ξ=0 only); bounded SVs (ξ>0 ⇒ αᵢ=C) named explicitly in narration, consistent with the KKT story. All failure demos narrate measured values.
+> SHIPPED: `d450c5e` (feat, 9 files, 16 tests) → reviews: spec CHANGES-REQUIRED (4 narration FAILs + supportCount semantics + 4 nits — every number independently re-measured) → fixes `e9dd50c` (+ formulas.ts:16 alignment) → closure: ALL CLOSED, 16/16; quality APPROVE (tie-break `>=`→`>` aligned with hard-margin sibling → `97ed465`).
 
 ### Task 13: perceptron
 
@@ -520,6 +528,9 @@ Comparisons: vs logistic (loss vs no loss), vs SVM (margin vs any separator), vs
 
 Failures: non-separable data (oscillation); η huge (numerical blowup); imbalanced classes (majority boundary).
 
+> **Plan drift (Task 13):** (1) Novikoff bound stated as (R/γ)² with GEOMETRIC γ — measured (2.244588/0.047207)² = 2260.769 (4 updates ≈ 565× under the bound; the plan's (R·‖w*‖/γ²) notation was the ‖w*‖-scaled variant, NOT Novikoff's theorem — corrected everywhere incl. a rewritten proof with the ‖w_k‖² ≤ k·η²R² norm recursion). (2) convergence check = clean-rotation scan (stricter than epoch-boundary; fixed a partial-sweep bug that masked accuracy 0.975 as converged); converged re-emission snapshot → 6 snapshots on the default; timeline 'Converge' only on the converged snapshot. (3) non-separable: overlapping offset clouds (class 0 at −margin, class 1 at origin — narration honest), exact-cycle detection + OSCILLATION_CAP=180 → 181 snapshots, failedAtStep 181, honest reason (cap message: "likely not separable, or needs more than the cap"). (4) loss-curve shows mistakesPerEpoch — "perceptron has NO loss function" (layer title). (5) η-invariance measured: η=1 vs 0.5 → identical 4 updates, weights scale exactly ×2. (6) required coverage adds: imbalanced-classes failure demo (nClass1 36:6 — measured: does NOT converge, minority accuracy 0.167, boundary x-intercept past the minority cluster, 89/180 updates on 3 minority points), vs-SGD comparison, sigmoid-misuse + update-on-correct gateTrap mistakes, random-init test (2 updates, accuracy 1).
+> SHIPPED: `293acad` (feat, 9 files, 24 tests) → reviews: spec CHANGES-REQUIRED (8 findings: derivation validity, bound formula, oscillation honesty, 3 coverage gaps, 3 wording, 1 test gap) → fixes `a1b82b9` (→ 25 tests; (R/γ)² re-anchored 2260.769) → closure: ALL CLOSED (empirically re-verified, full suite green); quality APPROVE (nClass1 guard + internal interface export cleanup → `97ed465`).
+
 ### Task 14: lda (Fisher's LDA — classification + dimensionality reduction)
 
 **Files:** `src/topics/lda/{...}.ts`
@@ -541,6 +552,9 @@ Mistakes: using PCA when labels available; forgetting S_W⁻¹; assuming LDA han
 Comparisons: vs PCA (supervised vs unsupervised — frequently-confused edge), vs logistic (generative vs discriminative), vs SVM.
 
 Failures: singular S_W (few samples per class); non-Gaussian multimodal classes; outliers in covariance estimation.
+
+> **Plan drift (Task 14):** (1) EXACT analytic solution w = S_W⁻¹(μ₁−μ₀) via adjugate (2×2) — no training iterations; run = 36×5° direction sweep (J(θ) curve, per-angle projection metrics) + final snapshot = closed-form optimum evaluated EXACTLY (J = 3.869000715 strictly beats every grid angle, max 3.861638793). (2) S_W convention = normalized per-class covariances (C₀+C₁) making J(ŵ) collapse EXACTLY to the plan's test-2 formula (μ̄₁−μ̄₂)²/(s₀²+s₁²); eigen-link λ = dᵀS_W⁻¹d asserted to 1e-9. (3) eigenviewer + distribution-view are Wave 4 — substituted with scatter projection + matrix-animator + metrics (registry-only rule). (4) unequal-priors Bayes threshold taught with the corrected formula τ = ŵᵀ(μ₀+μ₁)/2 − ln(P(C₁)/P(C₀))/‖w‖ (sign + scale fixed in review; simulation uses the equal-priors midpoint). (5) singular S_W → telemetry failure "singular" (failures.ts); lossMetricKey 'jFisher' higher-better (layer title says so); "variance within classes minimal" honestly qualified (Fisher maximizes the RATIO — within-variance compresses below the mean-diff axis but is not the absolute minimum).
+> SHIPPED: `58534ba` (feat, 9 files, 29 tests) → reviews: spec CHANGES-REQUIRED (1 math finding — Bayes threshold sign+scale, verified τ=−4.394 on the diag(4,1)/π₁=0.9 counterexample; 3 narration nits) → fixes `5ea33d8` → closure: ALL CLOSED, 29/29; quality APPROVE (minors informational — invSW reuse, near-singular test — non-blocking).
 
 ---
 
