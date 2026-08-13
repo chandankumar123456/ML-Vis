@@ -19,7 +19,7 @@
 //       - For a fixed s the offset b is minimized EXACTLY: g(b) = Σᵢ max(0,
 //         yᵢ(kᵢ − b)) with kᵢ = yᵢ − s·(n·xᵢ) is convex piecewise-linear, so its
 //         minimizer sits at one of the n breakpoints b = kᵢ — we evaluate all n
-//         (O(n²), n ≤ 26) and take the leftmost minimum (deterministic).
+//         (O(n²), n ≤ 30) and take the leftmost minimum (deterministic).
 //       - The scale s is minimized by golden-section search over s ∈ [1e-4, 100]
 //         (40 iterations → bracket shrinks by 0.618⁴⁰ ≈ 6e-9). Partial
 //         minimization of a jointly convex function is convex, so h(s) is
@@ -364,7 +364,10 @@ function metricsOf(points: SvmPoint[], fit: SoftFit, evals: PointEval[], C: numb
     violatedCount: violated,
     insideMarginCount: inside,
     misclassifiedCount: misclassified,
-    supportCount: support,
+    // FREE support vectors only (ξ ≈ 0, on the band). Bounded support vectors
+    // (ξ > 0 ⇒ αᵢ = C, per the KKT derivation) ARE the violated points and are
+    // reported separately as violatedCount — the narration says so explicitly.
+    freeSupportCount: support,
     nPoints: points.length,
   };
 }
@@ -471,13 +474,17 @@ function highlightOf(evals: PointEval[]): SimState['highlights'] {
 }
 
 function fmtC(C: number): string {
-  return C >= 1 ? String(C) : String(C);
+  return String(C);
 }
 
 function snapshotAt(points: SvmPoint[], C: number, first: boolean, prev?: SimState): SimState {
   const fit = solveSoftMargin(points, C);
   const evals = evaluateFit(points, fit.w1, fit.w2, fit.b);
   const m = metricsOf(points, fit, evals, C);
+
+  // Only the first snapshot's explanation needs the independent hard-margin
+  // reference (null when the data is non-separable, e.g. with the outlier on).
+  const hardRef = first ? solveHardMarginReference(points) : null;
 
   const math: MathStep[] = [
     { latex: '\\min_{w,b,\\xi}\\; \\tfrac{1}{2}\\|w\\|^2 + C\\sum_{i=1}^{n} \\xi_i \\quad\\text{s.t.}\\quad y_i(w\\cdot x_i + b) \\ge 1 - \\xi_i,\\; \\xi_i \\ge 0', id: 'svm-soft-objective' },
@@ -488,7 +495,9 @@ function snapshotAt(points: SvmPoint[], C: number, first: boolean, prev?: SimSta
   }
 
   const firstWhy =
-    `C = ${C} makes violations nearly free, so the solver prefers a WIDE margin band to a tight one: margin = ${m.margin.toFixed(2)} (‖w‖ = ${m.s.toFixed(3)}). The decision boundary still separates the two clusters; the band is far wider than the hard-margin value, and every point inside it pays a small slack ξᵢ (Σξ = ${m.slackSum.toFixed(3)}), which is exactly the soft-margin tradeoff.`;
+    `C = ${C} makes violations nearly free, so the solver prefers a very wide band: margin = ${m.margin.toFixed(2)} ` +
+    `${hardRef ? `vs the hard-margin ${hardRef.margin.toFixed(2)}` : '(no hard-margin fit exists — the data is non-separable)'} ` +
+    `(‖w‖ = ${m.s.toFixed(3)}), and it even accepts a handful of misclassified points (${m.misclassifiedCount} of ${m.nPoints}) rather than paying for a tight fit. ${m.violatedCount} of ${m.nPoints} points pay slack ξᵢ (Σξ = ${m.slackSum.toFixed(3)}) — the soft-margin tradeoff at the cheap-slack end.`;
   let why = firstWhy;
   const changed: string[] = [];
   if (!first && prev) {
@@ -498,9 +507,16 @@ function snapshotAt(points: SvmPoint[], C: number, first: boolean, prev?: SimSta
     changed.push(`C → ${fmtC(C)}`);
     if (prevMargin !== undefined && prevMargin !== m.margin) changed.push(`margin → ${m.margin.toFixed(2)}`);
     if (prevObj !== undefined && prevObj !== m.objective) changed.push(`objective → ${m.objective.toFixed(3)}`);
+    // Only claim the margin band "tightens" when it actually moves: on separable
+    // data the fit is already at the hard-margin optimum, so most C steps leave
+    // the band (and the fit) untouched — only the price per unit of slack rises.
+    const marginMoved = prevMargin !== undefined && prevMargin.toFixed(3) !== m.margin.toFixed(3);
     why =
-      `Raising C from ${fmtC(prevC)} to ${fmtC(C)} makes each unit of slack ${C === 0 ? 0 : (C / (prevC || 1)).toFixed(0)}× more expensive, so the solver tightens the margin band ` +
-      `(${prevMargin !== undefined ? prevMargin.toFixed(2) : '—'} → ${m.margin.toFixed(2)}) to push points back outside it. Σξ = ${m.slackSum.toFixed(3)}, objective ½‖w‖² + C·Σξ = ${m.objective.toFixed(3)}.`;
+      `Raising C from ${fmtC(prevC)} to ${fmtC(C)} makes each unit of slack ${C === 0 ? 0 : (C / (prevC || 1)).toFixed(0)}× more expensive. ` +
+      (marginMoved
+        ? `The solver tightens the margin band (${prevMargin !== undefined ? prevMargin.toFixed(2) : '—'} → ${m.margin.toFixed(2)}) to push points back outside it. `
+        : `Here the margin band does not move (${prevMargin !== undefined ? prevMargin.toFixed(2) : '—'} → ${m.margin.toFixed(2)}) — the optimum is unchanged because no rotation would reduce total slack, so the fit stays put and only the price per unit of slack rises. `) +
+      `Σξ = ${m.slackSum.toFixed(3)}, objective ½‖w‖² + C·Σξ = ${m.objective.toFixed(3)}.`;
   }
 
   const events: SimState['events'] = [{ type: 'fit', label: 'svm-soft-margin-solve', step: 0 }];
@@ -513,7 +529,7 @@ function snapshotAt(points: SvmPoint[], C: number, first: boolean, prev?: SimSta
     narration:
       `C = ${fmtC(C)}: margin = ${m.margin.toFixed(2)} (2/‖w‖), ‖w‖ = ${m.s.toFixed(3)}, ` +
       `objective = ${m.objective.toFixed(3)}, Σξ (hinge) = ${m.slackSum.toFixed(3)}, ` +
-      `${m.violatedCount} points in the margin band (${m.misclassifiedCount} misclassified, ${m.insideMarginCount} inside-but-correct), ${m.supportCount} support vectors`,
+      `${m.violatedCount} points in the margin band (${m.misclassifiedCount} misclassified, ${m.insideMarginCount} inside-but-correct) — these are the bounded support vectors (αᵢ = C) — and ${m.freeSupportCount} free support vector${m.freeSupportCount === 1 ? '' : 's'} on the band (ξ = 0)`,
     explanation: {
       changed,
       why,

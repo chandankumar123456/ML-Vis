@@ -6,7 +6,7 @@ import type { TestCase } from '../../engine/types';
 //
 // NOTE on the C-sweep simulation: a run emits one snapshot per log-grid value
 // below params.C, then EXACTLY params.C last (mirrors ridge's λ-sweep). At
-// C = 1000 that is 12 snapshots max, so maxSteps = 20 always exceeds the count
+// C = 1000 that is 11 snapshots max (C_GRID has 11 values), so maxSteps = 20 always exceeds the count
 // and the engine never flags a spurious step-budget failure. All runs terminate
 // cleanly (sweep complete → null), so converged: true.
 export const svmSoftTestCases: TestCase[] = [
@@ -25,7 +25,7 @@ export const svmSoftTestCases: TestCase[] = [
       finalMetrics: {
         margin: (v: number) => v > 1.5 && v < 3,      // ≈ 2 (clusters 2 apart)
         slackSum: (v: number) => v < 0.01,             // essentially zero slack
-        supportCount: (v: number) => v >= 2,
+        freeSupportCount: (v: number) => v >= 2,
         violatedCount: (v: number) => v <= 2,
       },
     },

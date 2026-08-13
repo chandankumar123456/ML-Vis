@@ -70,7 +70,7 @@ export const svmSoftDerivations: Derivation[] = [
       },
       {
         latex: '\\xi_i = 0,\\; \\alpha_i \\in (0, C): \\text{ free support vector (on the band)} \\qquad \\xi_i > 0,\\; \\alpha_i = C: \\text{ bounded support vector (inside/wrong side)}',
-        justification: 'The three KKT regimes map exactly onto the geometry: free SVs on the band edges define the margin, bounded SVs with ξ > 0 are the points the soft margin tolerates. Both kinds are highlighted in the simulation.',
+        justification: 'The three KKT regimes map exactly onto the geometry: free SVs on the band edges define the margin, bounded SVs with ξ > 0 are the points the soft margin tolerates. Both kinds are highlighted in the simulation (violated points get slack lines and a larger highlight; free SVs get amber rings) — but the run\'s "support vectors" count covers only the FREE ones (ξ = 0, on the band); the bounded SVs (ξ > 0, αᵢ = C) appear in the "points in the margin band" count instead.',
       },
     ],
     derivedFrom: ['svm-dual-box', 'svm-slack-constraints'],

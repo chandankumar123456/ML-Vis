@@ -13,7 +13,7 @@ export const svmSoftFormulas: Formula[] = [
       { symbol: '\\frac{1}{2}\\|w\\|^2', meaning: 'margin term — minimizing ‖w‖² maximizes the margin 2/‖w‖', dimensions: 'squared' },
     ],
     assumptions: ['Data (approximately) separable; C is finite. yᵢ ∈ {+1, −1} labels.'],
-    failureCases: ['C → ∞ with outliers → boundary chases noise (overfit)', 'C → 0 → all slack free → huge margin, everything inside the band (underfit)'],
+    failureCases: ['C → ∞ with an outlier NEAR the boundary → the boundary bends toward the noise (overfit); a deep outlier is instead absorbed by slack — the box constraint αᵢ ≤ C caps single-point influence', 'C → 0 → all slack free → huge margin, everything inside the band (underfit)'],
     derivesFrom: ['svm-hard-margin-objective'],
     connections: ['Hinge loss', 'Slack variables', 'Convex optimization'],
     whyWorks: 'Softening the hard constraint y·f ≥ 1 into y·f ≥ 1 − ξᵢ with a linear penalty C·Σξᵢ keeps the problem convex while allowing misclassification. C is the dial: large C demands few violations (narrow margin, low bias), small C tolerates slack (wide margin, low variance).',
