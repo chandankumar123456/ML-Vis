@@ -52,7 +52,7 @@ export const svmQuestions: Question[] = [
     explanation: 'The margin measures the clearance between the boundary and the data: the larger it is, the harder it is for a small shift in a point (or a new sample near the boundary) to cross the line. Theoretically, the generalization error is bounded by a term that grows with the boundary complexity and shrinks as the margin grows (margin-based bounds). In the simulation, the max-margin separator at ½‖w‖² = 1.228 (margin 1.276) is the unique most-robust line — a perceptron-style arbitrary separator with the same training accuracy would sit arbitrarily close to a support vector.',
     trapExplanations: {
       B: 'Dataset size and margin are independent; a large margin is a property of the separator, not of n.',
-      C: 'The opposite: the max-margin solution has the MINIMUM number of effective constraints (2 support vectors on the default seed) — more SVs usually signals a tighter, less regular separator.',
+      C: 'The opposite: the max-margin solution is determined by the fewest possible points — only the margin-touching ones (2 on the default seed, 3 on seed 7) — so maximizing the margin shrinks the determining set rather than adding support vectors.',
       D: 'The margin is a geometric quantity, not a probability; the SVM maximizes a margin, not an estimated accuracy.',
     },
     concepts: ['svm', 'generalization', 'margin'],

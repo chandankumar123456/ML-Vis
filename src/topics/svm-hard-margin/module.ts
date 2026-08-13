@@ -18,17 +18,19 @@
 //    ‖w‖ = 2/gap, margin = 2/‖w‖ = gap, support vectors at distance 1/‖w‖.
 //    The global optimum is the direction with the LARGEST gap — exact.
 //  - Step model: CANDIDATE SWEEP (mirrors knn's k-sweep / ridge's λ-sweep).
-//    One snapshot per feasible candidate direction, ordered WEAKEST → STRONGEST
-//    margin, so the running-best separator and the loss ½‖w‖² (lossMetricKey,
-//    lower-better) improve monotonically and the FINAL snapshot is exactly the
-//    global max-margin solution. The sweep list is computed once per params key
-//    and memoized (bounded cache), so initialState/step are O(1) after the first.
+//    One snapshot per displayed candidate (top-40 by gap, SWEEP_CAP), ordered
+//    WEAKEST → STRONGEST margin, so the running-best separator and the loss
+//    ½‖w‖² (lossMetricKey, lower-better) improve monotonically and the FINAL
+//    snapshot is exactly the global max-margin solution. The sweep list is
+//    computed once per params key and memoized (bounded cache), so
+//    initialState/step are O(1) after the first.
 //  - Data: two Gaussian clusters (class 0 left at −margin, class 1 right at
 //    +margin), `margin` slider = cluster separation. Hard margin needs separable
 //    data: generation runs a bounded deterministic seed search (seed, seed+1, …)
 //    until separation holds (checked with the solver's own gap test: separable
-//    ⇔ some direction has gap > 0). At the supported slider range (margin ≥ 0.5,
-//    noise ≤ 1.5) the search exits immediately at the requested seed; if none of
+//    ⇔ some direction has gap > 0). At the default settings the search exits
+//    immediately at the requested seed; for tight/noisy in-range draws it may
+//    advance to a later separable seed (see failures.ts). If none of
 //    200 candidate seeds separates, initialState throws an honest error →
 //    computeRun telemetry records it (converged: false). The effective seed is
 //    surfaced in metrics + algorithm (dataSeed).
@@ -400,7 +402,7 @@ function snapshotAt(
     explanation: {
       changed,
       why: first
-        ? `Optimization sweep starts at the WEAKEST feasible separator: every point pair defines a candidate direction (cross-class pair → normal ∥ the segment, the 2-support-vector optimum family; same-class pair → normal ⊥ the segment, the 3-support-vector family), and for that direction the best canonical separator is the bisector of the extreme projections (band width = gap). Candidates are examined weakest → strongest margin, so ½‖w‖² falls monotonically.`
+        ? `Optimization sweep starts at the weakest displayed separator (the top-40 by gap, SWEEP_CAP): every point pair defines a candidate direction (cross-class pair → normal ∥ the segment, the 2-support-vector optimum family; same-class pair → normal ⊥ the segment, the 3-support-vector family), and for that direction the best canonical separator is the bisector of the extreme projections (band width = gap). Candidates are examined weakest → strongest margin, so ½‖w‖² falls monotonically.`
         : `Candidate ${rank}/${total}: direction from points d${iA}–d${iB} gives band width ${cand.gap.toFixed(3)} (${cand.sv.length} support vectors at distance 1/‖w‖ = ${cand.gamma.toFixed(3)} from the boundary). The running best ½‖w‖² = ${cand.halfWSq.toFixed(4)}${isFinal ? ' — this is the global max-margin separator: the largest gap over all pair directions, exact for 2D' : '.'}`,
       formulaRef: 'svm-margin',
       dependsOn: ['linear-algebra', 'convex-optimization', 'gradient-descent'],
@@ -416,9 +418,10 @@ function snapshotAt(
 }
 
 export const simulation = {
-  /**
-   * Snapshot 1 = the weakest feasible candidate; each step advances to the next
-   * (stronger) candidate in the sweep; the final snapshot is the exact optimum.
+/**
+   * Snapshot 1 = the weakest displayed candidate (top-40 by gap, SWEEP_CAP);
+   * each step advances to the next (stronger) candidate in the sweep; the final
+   * snapshot is the exact optimum.
    * Non-separable data (pathological params) throws here → computeRun telemetry
    * records an honest failure (converged: false).
    */
