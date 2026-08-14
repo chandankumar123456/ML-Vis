@@ -1,0 +1,125 @@
+// src/topics/hierarchical-clustering/formulas.ts
+// Measured anchors (default run — n 12, linkage single, blobs 2, seed 42):
+//   merge heights [0.241069, 0.266371, 0.352660, 0.543091, 0.593911,
+//                  0.596020, 0.693380, 0.733356, 0.880545, 0.895525,
+//                  1.794794]; max 1.795 (the two-blob bridge),
+//   copheneticCorr = 0.901, cut@1.2 → 2 clusters, median-height cut → 6.
+//   Hand-verified dataset A (4 collinear points): heights [0.5, 1, 2],
+//   copheneticCorr ≈ 0.8985 (Pearson computed by hand in testCases.test.ts).
+import type { Formula } from '../../engine/types';
+
+export const hierarchicalFormulas: Formula[] = [
+  {
+    id: 'hc-linkage-single',
+    latex: 'd_{\\text{single}}(A, B) = \\min_{a \\in A,\\, b \\in B} d(a, b)',
+    symbols: [
+      { symbol: 'd(a,b)', meaning: 'Euclidean distance between point a (in cluster A) and point b (in cluster B) — the pairwise distance matrix D', dimensions: 'feature units' },
+      { symbol: '\\min_{a \\in A,\\, b \\in B}', meaning: 'the SMALLEST pairwise distance across the two clusters — the "closest neighbors" rule', dimensions: '—' },
+      { symbol: 'd_{\\text{single}}(A, B)', meaning: 'the single-linkage merge cost of clusters A and B — the height of their merge in the dendrogram', dimensions: 'feature units' },
+    ],
+    assumptions: ['Euclidean distances are meaningful on the raw (or standardized) feature space', 'Heights stay non-decreasing across the run — single linkage satisfies the reducibility property, so the dendrogram grows monotonically'],
+    failureCases: ['Chaining: a thin line of points gets merged one at a time at nearly the same height, hiding the real structure (the plan\'s #1 failure — measured on the 6-point line demo: five merges all at height 1)', 'Ties: duplicate points give zero distances; the tie-break (smaller cluster ids) is deterministic but arbitrary', 'A single bridging point can make two well-separated clouds look like one cluster'],
+    derivesFrom: [],
+    derivationIds: ['hc-single-min-pairwise'],
+    connections: ['hc-linkage-complete', 'hc-linkage-average', 'Lance-Williams update: D(A∪B, C) = min(D(A,C), D(B,C))'],
+    whyWorks: 'Two clusters merge when their CLOSEST members touch. Recomputing from the point sets is equivalent to the Lance-Williams update D(A∪B, C) = min(D(A,C), D(B,C)): the closest pair across the union is the closer of the two closest pairs. On dataset A the nearest pair is (p2, p3) at 0.5, so that is the first merge; the tree is exactly what the min-rule produces.',
+  },
+  {
+    id: 'hc-linkage-complete',
+    latex: 'd_{\\text{complete}}(A, B) = \\max_{a \\in A,\\, b \\in B} d(a, b)',
+    symbols: [
+      { symbol: '\\max_{a \\in A,\\, b \\in B}', meaning: 'the LARGEST pairwise distance across the two clusters — the "farthest neighbors" rule', dimensions: '—' },
+      { symbol: 'd_{\\text{complete}}(A, B)', meaning: 'the complete-linkage merge cost — produces compact, round clusters (the anti-chaining criterion)', dimensions: 'feature units' },
+    ],
+    assumptions: ['Same pairwise distance matrix D as single linkage — only the aggregation changes', 'Monotone heights: complete linkage is reducible, so the dendrogram grows strictly upward'],
+    failureCases: ['Sensitive to outliers WITHIN a cluster: one stray member makes every merge it participates in expensive (the outlier singleton failure)', 'Does NOT find arbitrarily-shaped clusters — it actively avoids the chains that single linkage over-produces, so it misses elongated structures'],
+    derivesFrom: [],
+    derivationIds: ['hc-complete-max-pairwise'],
+    connections: ['hc-linkage-single', 'Lance-Williams update: D(A∪B, C) = max(D(A,C), D(B,C))'],
+    whyWorks: 'Two clusters merge when their FARTHEST members touch — the diameter rule. This is the mirror image of single linkage: min becomes max, and the Lance-Williams update is D(A∪B, C) = max(D(A,C), D(B,C)). On dataset B the contrast is measurable: complete merges (p0, p1) at 1.118 before touching the tight pair, because p1 is far (1.217) from the right cluster — final merge 2.220 vs single linkage\'s 1.118.',
+  },
+  {
+    id: 'hc-linkage-average',
+    latex: 'd_{\\text{average}}(A, B) = \\frac{1}{|A| \\cdot |B|} \\sum_{a \\in A} \\sum_{b \\in B} d(a, b)',
+    symbols: [
+      { symbol: '|A| \\cdot |B|', meaning: 'the number of point pairs (one from each cluster) — the denominator of the mean', dimensions: 'count²' },
+      { symbol: '\\sum_{a \\in A} \\sum_{b \\in B} d(a, b)', meaning: 'the sum of ALL pairwise distances across the clusters', dimensions: 'feature units' },
+      { symbol: 'd_{\\text{average}}(A, B)', meaning: 'the average-linkage merge cost — a compromise between min and max (UPGMA)', dimensions: 'feature units' },
+    ],
+    assumptions: ['All pairs are weighted equally (UPGMA — unweighted pair group method with arithmetic mean)', 'Requires O(|A|·|B|) work per pair evaluation — the naive O(n³) recomputation is the plan\'s complexity failure'],
+    failureCases: ['The mean hides extremes: a cluster with one far outlier and many close points gets a moderate cost, masking the outlier', 'Weighting choices matter — weighted vs unweighted variants give different trees (this topic uses UPGMA: every point pair equal)'],
+    derivesFrom: ['hc-linkage-single', 'hc-linkage-complete'],
+    connections: ['Lance-Williams update: D(A∪B, C) = (|A|·D(A,C) + |B|·D(B,C)) / (|A|+|B|)', 'UPGMA'],
+    whyWorks: 'The mean pairwise distance between clusters interpolates between single (min) and complete (max): it is less chain-prone than single and less outlier-sensitive than complete. The Lance-Williams form is a size-weighted average of the existing distances, so it can be updated in O(1) once D(A,C) and D(B,C) are known — the source of the O(n² log n) heap-accelerated bound.',
+  },
+  {
+    id: 'hc-linkage-ward',
+    latex: '\\Delta SSE(A, B) = \\frac{|A| \\cdot |B|}{|A| + |B|} \\cdot \\|\\mu_A - \\mu_B\\|^2',
+    symbols: [
+      { symbol: '\\mu_A', meaning: 'centroid (mean position) of cluster A', dimensions: 'feature units' },
+      { symbol: '\\|\\mu_A - \\mu_B\\|^2', meaning: 'squared distance between the two centroids', dimensions: 'feature²' },
+      { symbol: '\\Delta SSE(A, B)', meaning: 'the increase in the total within-cluster sum of squares when A and B merge — Ward\'s merge cost (variance units, NOT a distance)', dimensions: 'feature²' },
+    ],
+    assumptions: ['The objective is the total within-cluster sum of squares SSE = Σ_k Σ_{i∈C_k} ‖x_i − μ_k‖², and each merge must increase it as little as possible', 'Heights are in squared units — the dendrogram axis for Ward is "SSE increase", not distance; mixing it with distance-linkage heights is the plan\'s trap mistake'],
+    failureCases: ['Comparing Ward heights to single/complete heights is meaningless (different units)', 'Ward favors compact spherical clusters — it fails on elongated or concave structures just like complete linkage', 'The size weighting |A|·|B|/(|A|+|B|) makes very uneven cluster sizes merge late even when they are close'],
+    derivesFrom: [],
+    derivationIds: ['hc-ward-sse-increase'],
+    connections: ['k-means SSE objective (the SAME sum-of-squares Ward minimizes greedily)', 'hc-linkage-average'],
+    whyWorks: 'Ward\'s method is the greedy version of the k-means objective: instead of picking k centroids, it repeatedly merges the pair that raises the total SSE the least. The closed form ΔSSE = (|A||B|)/(|A|+|B|)·‖μ_A−μ_B‖² is derived in derivation hc-ward-sse-increase — it falls out of expanding SSE(A∪B) − SSE(A) − SSE(B). Because it is variance-based, Ward produces compact, balanced trees.',
+  },
+  {
+    id: 'hc-lance-williams',
+    latex: 'D(A \\cup B, C) = \\alpha_A D(A, C) + \\alpha_B D(B, C) + \\beta D(A, B) + \\gamma \\,|D(A, C) - D(B, C)|',
+    symbols: [
+      { symbol: '\\alpha_A, \\alpha_B, \\beta, \\gamma', meaning: 'criterion-specific coefficients: single (½, ½, 0, −½), complete (½, ½, 0, ½), average (|A|/(|A|+|B|), |B|/(|A|+|B|), 0, 0), Ward (size-weighted, see hc-linkage-ward)', dimensions: '—' },
+      { symbol: 'D(A, B)', meaning: 'the (previously computed) merge cost of A and B — the update reuses it', dimensions: 'feature units' },
+      { symbol: 'D(A \\cup B, C)', meaning: 'the distance from the new cluster to any other cluster C, updated from stored values in O(1)', dimensions: 'feature units' },
+    ],
+    assumptions: ['Clusters are merged one pair at a time and distances are updated incrementally — the basis of the O(n² log n) heap-based implementations', 'Coefficients must satisfy the reducibility condition for monotone heights (all four linkages of this topic do)'],
+    failureCases: ['Negative or inconsistent coefficients produce non-monotone dendrograms (e.g. centroid linkage is NOT reducible — heights can decrease)', 'Implementing Lance-Williams from the raw points instead is O(n²) per merge (the naive path this topic takes on purpose for n ≤ 20)'],
+    derivesFrom: ['hc-linkage-single', 'hc-linkage-complete', 'hc-linkage-average', 'hc-linkage-ward'],
+    connections: ['O(n³) naive vs O(n² log n) with heaps (the complexity failure)'],
+    whyWorks: 'Every agglomerative criterion on a set of points can be expressed as a Lance-Williams update — one formula, four coefficient sets. The subtle |D(A,C) − D(B,C)| term (γ) appears for single and complete but not average; Ward uses size-weighted α. This topic recomputes linkage values from the raw point sets (honest, simple, O(n³) for n ≤ 20) — the update formula is the theoretical link to production implementations.',
+  },
+  {
+    id: 'hc-cophenetic',
+    latex: 'c_{ij} = \\text{height of the first merge that puts } i \\text{ and } j \\text{ in the same cluster}',
+    symbols: [
+      { symbol: 'c_{ij}', meaning: 'the cophenetic distance of pair (i, j) — the height of their lowest common ancestor merge in the dendrogram', dimensions: 'feature units' },
+      { symbol: 'c_{ii}', meaning: 'diagonal entries are 0 (a point is trivially "in its own cluster" at height 0)', dimensions: 'feature units' },
+    ],
+    assumptions: ['The dendrogram is a binary tree with strictly non-decreasing merge heights (true for all four linkages here)', 'c is a matrix of the same shape as D — the pair (i,j) is compared against d(i,j)'],
+    failureCases: ['With duplicate points, several pairs share the same zero cophenetic value — the correlation is still defined but dominated by ties', 'A non-monotone tree (centroid linkage) breaks the "first merge" reading — the merge height is no longer a consistent threshold'],
+    derivesFrom: ['hc-linkage-single', 'hc-linkage-complete', 'hc-linkage-average', 'hc-linkage-ward'],
+    connections: ['hc-cophenetic-corr', 'The matrix-animator C grid on the final snapshot'],
+    whyWorks: 'Every pair of leaves has exactly one lowest common ancestor — the merge whose children first make them co-members. Its height IS the cophenetic distance: the level at which the tree "joins" those two points. On dataset A the pairs (p0,p2), (p0,p3), (p1,p2), (p1,p3) all first join at the final merge, so all four cophenetic values are 2 — while d(p2,p3) = 0.5 maps to c = 0.5 (measured, hand-computed in the tests).',
+  },
+  {
+    id: 'hc-cophenetic-corr',
+    latex: 'r = \\frac{\\sum_{i<j} (d_{ij} - \\bar d)(c_{ij} - \\bar c)}{\\sqrt{\\sum_{i<j} (d_{ij} - \\bar d)^2 \\sum_{i<j} (c_{ij} - \\bar c)^2}}',
+    symbols: [
+      { symbol: 'd_{ij}', meaning: 'the original pairwise distance of points i and j', dimensions: 'feature units' },
+      { symbol: 'c_{ij}', meaning: 'their cophenetic distance (hc-cophenetic)', dimensions: 'feature units' },
+      { symbol: 'r', meaning: 'the Pearson correlation over all n(n−1)/2 off-diagonal pairs — how faithfully the tree reproduces the distance ordering', dimensions: 'dimensionless' },
+    ],
+    assumptions: ['Both series have nonzero variance (the degenerate guard reports 0 for constant series)', 'Correlation measures the LINEAR agreement between distances and merge heights, not the absolute error'],
+    failureCases: ['High r does not mean "right number of clusters" — a tree can rank distances well yet cut badly', 'On degenerate data (duplicate points) the ties dominate and r is inflated', 'r is computed on the FULL tree only — per-merge "r so far" is meaningless (why this topic has no loss curve)'],
+    derivesFrom: ['hc-cophenetic'],
+    connections: ['Pearson correlation (statistics)', 'Dendrogram validity — a value near 1 means the merge heights preserve the distance ordering'],
+    whyWorks: 'If the dendrogram were a perfect distance-preserving tree, the merge height of every pair would be proportional to its distance and r would be 1. Real data compresses distances into n−1 merge levels, so r measures how much of the distance ordering survives. Default run: r = 0.901 (measured) — the two-blob structure dominates, and the within-blob distances rank almost perfectly.',
+  },
+  {
+    id: 'hc-cut',
+    latex: '\\text{clusters at height } h = \\{ \\text{connected components after keeping only merges with height} \\le h \\}',
+    symbols: [
+      { symbol: 'h', meaning: 'the cut height — a horizontal line across the dendrogram', dimensions: 'feature units' },
+      { symbol: '\\text{kept merges}', meaning: 'the merges at or below the line; each remaining connected component is one cluster', dimensions: '—' },
+      { symbol: 'k', meaning: 'the number of clusters: higher cuts → fewer, bigger clusters (monotone)', dimensions: 'count' },
+    ],
+    assumptions: ['Heights are non-decreasing (true here) so "merges ≤ h" is a prefix of the merge list', 'The cut is horizontal — the standard dendrogram reading'],
+    failureCases: ['Cutting at 0 gives n singleton clusters and at max height gives 1 — both degenerate but honest', 'Choosing h by eye is arbitrary; the plan recommends gap-based heuristics (the big 0.896 → 1.795 gap on the default run is the natural cut)'],
+    derivesFrom: ['hc-cophenetic'],
+    connections: ['k selection in k-means (the elbow analogue)', 'hc-cophenetic-corr'],
+    whyWorks: 'Every merge is a threshold: below its height its children are separate clusters, at or above they are one. So a horizontal cut at h yields exactly the partition of the final tree that the merges with height ≤ h define. Because heights are monotone, the cluster count is a non-increasing step function of h — asserted in the tests (cut at 0.4 → 4 clusters, 0.75 → 3, 1.5 → 2, 2.5 → 1 on dataset A).',
+  },
+];
