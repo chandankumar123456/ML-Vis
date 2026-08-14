@@ -14,6 +14,9 @@ import { MatrixAnimator } from './MatrixAnimator';
 import { DerivationPlayer } from './DerivationPlayer';
 import { ExplainStep } from './ExplainStep';
 import { DecisionBoundary } from './DecisionBoundary';
+import { Eigenviewer } from './Eigenviewer';
+import { DistributionView } from './DistributionView';
+import { collectDistributions } from './distribution';
 
 export function registerAllViews(): void {
   registerView('scatter-plot', (p: ViewProps) => <ScatterPlot {...p} />);
@@ -31,5 +34,16 @@ export function registerAllViews(): void {
   // SVM topics later wire supportVectors/marginLines through their topic module.
   registerView('decision-boundary', (p: ViewProps) => (
     <DecisionBoundary snapshot={p.snapshot} params={p.params} topic={p.topic} />
+  ));
+  // eigenviewer is a readonly view bound to the current snapshot; the axis
+  // slider is the only local state (a user override of the snapshot's axis).
+  registerView('eigenviewer', (p: ViewProps) => (
+    <Eigenviewer snapshot={p.snapshot} params={p.params} />
+  ));
+  // distribution-view resolves class densities from the snapshot's visuals
+  // (topics emit {type:'distribution', label, mean, variance, color} commands
+  // alongside their math); x/y ranges are fitted when the topic omits them.
+  registerView('distribution-view', (p: ViewProps) => (
+    <DistributionView distributions={collectDistributions(p.snapshot?.visuals ?? [])} />
   ));
 }

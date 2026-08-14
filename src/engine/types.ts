@@ -21,6 +21,37 @@ export interface VisualCommand {
   [key: string]: unknown;
 }
 
+// ===== Eigenviewer visual commands =====
+// Consumed by the 'eigenviewer' registry view. angle is the direction of the
+// candidate axis (radians, measured from the +x axis, through the data
+// centroid); topics animate rotation by re-emitting snapshots with new angles.
+export interface AxisCommand extends VisualCommand {
+  type: 'axis';
+  angle: number;              // radians
+  color?: string;
+}
+
+// A data point projected onto the candidate axis. `onto` is the orthogonal
+// projection of `point` on the axis line; `residual` is the optional
+// perpendicular distance (reconstruction error) if the topic pre-computed it.
+export interface ProjectionCommand extends VisualCommand {
+  type: 'projection';
+  point: [number, number];
+  onto: [number, number];
+  residual?: number;
+  color?: string;
+}
+
+// ===== Gaussian class density =====
+// A univariate Gaussian used by the 'distribution-view' registry view
+// (naive-bayes per-feature densities, mle likelihood curves, lda class PDFs).
+export interface Distribution {
+  label: string;
+  mean: number;
+  variance: number;
+  color?: string;
+}
+
 export interface MathStep {
   latex: string;
   caption?: string;
