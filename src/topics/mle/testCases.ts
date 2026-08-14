@@ -3,7 +3,7 @@ import type { TestCase } from '../../engine/types';
 
 // Empirical anchors (all measured by running the simulator — see testCases.test.ts):
 //   coin seed 42, pTrue 0.7, n=1000: k = 707, p̂ = 0.707 (pErr 0.007),
-//     run = 5 snapshots ([10, 30, 100, 300, 1000]), nll descends 0.5004 → 0.6048
+//     run = 5 snapshots ([10, 30, 100, 300, 1000]), nll ascends 0.5004 → 0.6048
 //     (true entropy H(0.7) = 0.6108643020548935); score(p̂) = 1.14e−13.
 //   gaussian seed 42, μ=1, σ=1.5, n=100: μ̂ = 0.7585326658425336,
 //     σ̂²(÷n) = 2.317688007784234, σ̂²ᵤ(÷(n−1)) = 2.341098997761853,

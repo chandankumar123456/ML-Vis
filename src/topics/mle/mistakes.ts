@@ -1,7 +1,7 @@
 // src/topics/mle/mistakes.ts
 // Measured anchors (seed 42): p̂=0.707 at n=1000 (k=707); score(p̂)=1.14e−13;
 //   σ̂²=0.850428 (÷n) vs σ̂²ᵤ=0.944920 (÷(n−1)) at n=10 — exactly 10/9 apart;
-//   L(0.9)=0 vs ℓ(0.9)=−604.8 at n=1000 (underflow).
+//   L(0.9)=0 vs ℓ(0.9)=−749.147 at n=1000 (underflow).
 import type { Mistake } from '../../engine/types';
 
 export const mleMistakes: Mistake[] = [
@@ -25,7 +25,7 @@ export const mleMistakes: Mistake[] = [
     id: 'mle-maximize-l-underflow',
     pattern: 'Maximizing the raw product L(θ) numerically instead of the log ℓ(θ), then wondering why the optimizer sees flat zeros',
     example: '\\max_\\theta \\prod_i p(x_i \\mid \\theta) \\;\\;\\text{— at } n=1000 \\text{ this is } 0 \\text{ for most }\\theta\\text{, including the MLE region}',
-    whyWrong: 'The product of 1000 factors below 1 underflows: measured L(0.707) = 2.1465e−263, and L(0.9) = 0 EXACTLY in double precision at n=1000. A gradient-based optimizer on L sees an all-zero landscape; the log-likelihood ℓ(0.9) = −604.8 stays finite and smooth. The log is not a convenience — it is numerically mandatory.',
+    whyWrong: 'The product of 1000 factors below 1 underflows: measured L(0.707) = 2.1465e−263, and L(0.9) = 0 EXACTLY in double precision at n=1000. A gradient-based optimizer on L sees an all-zero landscape; the log-likelihood ℓ(0.9) = −749.147 stays finite and smooth. The log is not a convenience — it is numerically mandatory.',
     gateTrap: true,
     relatedConcept: 'mle-loglik',
   },

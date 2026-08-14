@@ -68,7 +68,7 @@ export const mleComparisons: Comparison[] = [
       {
         axis: 'Measured link',
         entries: [
-          { topic: 'mle', value: 'The module plots nllPerSample = −ℓ(θ̂)/n = 0.6048 at n=1000, descending toward H(0.7) = 0.610864' },
+          { topic: 'mle', value: 'The module plots nllPerSample = −ℓ(θ̂)/n = 0.6048 at n=1000, ascending toward H(0.7) = 0.610864' },
           { topic: 'cross-entropy-loss', value: 'That same nllPerSample IS the empirical cross-entropy — the loss-curve metric both topics share' },
         ],
       },

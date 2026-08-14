@@ -36,12 +36,12 @@ export const mleQuestions: Question[] = [
     prompt: 'GATE-style: why do MLE computations almost always maximize the log-likelihood ℓ(θ) instead of the likelihood L(θ)?',
     options: [
       'Maximizing ℓ gives a DIFFERENT (better) estimate than maximizing L; the log is a correction term',
-      'The log turns the product over n factors into a sum, which avoids numerical underflow (measured: L(0.9) = 0 exactly at n=1000 while ℓ(0.9) = −604.8) and makes derivatives tractable; argmax ℓ = argmax L exactly',
+      'The log turns the product over n factors into a sum, which avoids numerical underflow (measured: L(0.9) = 0 exactly at n=1000 while ℓ(0.9) = −749.147) and makes derivatives tractable; argmax ℓ = argmax L exactly',
       'The log makes ℓ concave even when L is not, so every MLE problem becomes convex',
       'The log divides by n so that ℓ is a per-sample quantity comparable across datasets',
     ],
     answer: 'B',
-    explanation: 'ln is strictly increasing, so argmax ℓ = argmax L — the maximizer never moves (measured: at n=10 both peak at p = 0.8). The real reason is numeric and analytic: the product of n factors below 1 collapses — even the maximum L(p̂) at n=1000 is 2.1465e−263, and at p = 0.9 it is exactly 0 in double precision — while ℓ stays finite at −604.8. Sums also differentiate far more easily than products.',
+    explanation: 'ln is strictly increasing, so argmax ℓ = argmax L — the maximizer never moves (measured: at n=10 both peak at p = 0.8). The real reason is numeric and analytic: the product of n factors below 1 collapses — even the maximum L(p̂) at n=1000 is 2.1465e−263, and at p = 0.9 it is exactly 0 in double precision — while ℓ stays finite at −749.147. Sums also differentiate far more easily than products.',
     trapExplanations: {
       A: 'Maximizing ℓ and L give the IDENTICAL maximizer — ln is monotone. No estimate changes.',
       C: 'ℓ is concave for the families in this topic, but NOT in general (mixture models have non-convex ℓ with local maxima) — the log does not buy convexity.',
@@ -90,6 +90,9 @@ export const mleQuestions: Question[] = [
   },
   {
     id: 'mle-006',
+    // Drift note (plan): the likelihood-vs-log-likelihood contrast is NOT a
+    // dedicated visual question here — it is covered conceptually by mle-003
+    // and numerically via the gaussian ℓ(μ, σ²) grid view (matrix-animator).
     mode: 'visual',
     prompt: 'Run the default coin simulation (family: coin flips, n = 100, seed 42) and scrub to the final snapshot. The fitted p̂ line sits at which value?',
     options: [
@@ -99,7 +102,7 @@ export const mleQuestions: Question[] = [
       '0.8 — the n=10 starting point of the sweep',
     ],
     answer: 'A',
-    explanation: 'At n=100 the seeded stream draws k = 74 heads, so the final snapshot\'s fitted line (blue) sits at p̂ = 74/100 = 0.74, while the true-p line (red) stays at 0.7. Scrubbing the growing-n sweep shows the blue line migrating 0.8 → 0.74 → 0.707 → toward 0.7 — the visual consistency story. The nll per sample descends 0.5004 → 0.5731 → 0.6048 toward the true entropy 0.610864.',
+    explanation: 'At n=100 the seeded stream draws k = 74 heads, so the final snapshot\'s fitted line (blue) sits at p̂ = 74/100 = 0.74, while the true-p line (red) stays at 0.7. Scrubbing the growing-n sweep shows the blue line migrating 0.8 → 0.74 toward the red true-p line at 0.7 (n = 10, 30, 100: p̂ = 0.8 at both n = 10 and n = 30, with k = 8 and k = 24, then p̂ = 0.74 at n = 100) — the visual consistency story. The nll per sample converges upward across the sweep\'s three snapshots 0.5004 → 0.5004 → 0.5731 (nll@30 = nll@10 because p̂ = 0.8 at both) toward the true entropy 0.610864.',
     trapExplanations: {
       B: '0.7 is the red TRUE-p reference line; the fitted estimate is the empirical frequency 0.74 at n=100.',
       C: '0.707 is the n=1000 endpoint — the default n=100 run stops at 0.74.',

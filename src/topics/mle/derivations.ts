@@ -22,8 +22,8 @@ export const mleDerivations: Derivation[] = [
         justification: 'The natural log turns the product into a sum. Because ln is strictly increasing, the maximizer is unchanged: argmax ℓ = argmax L. Measured at n=10 (k=8): BOTH L(p) and ℓ(p) peak at p = 0.8.',
       },
       {
-        latex: 'L(0.9) \\text{ at } n=1000 \\;=\\; 0.9^{707}\\cdot 0.1^{293} = 0 \\;\\text{ (double underflow)} \\quad \\text{vs} \\quad \\ell(0.9) = -604.8',
-        justification: 'The product of 1000 factors below 1 collapses: even the MAXIMUM likelihood L(p̂) = 2.1465e−263 is far below double precision, and at p = 0.9 the product is exactly 0. The log-likelihood stays a perfectly representable −604.8 — this is why every MLE computation works with ℓ.',
+        latex: 'L(0.9) \\text{ at } n=1000 \\;=\\; 0.9^{707}\\cdot 0.1^{293} = 0 \\;\\text{ (double underflow)} \\quad \\text{vs} \\quad \\ell(0.9) = -749.147',
+        justification: 'The product of 1000 factors below 1 collapses: even the MAXIMUM likelihood L(p̂) = 2.1465e−263 is far below double precision, and at p = 0.9 the product is exactly 0. The log-likelihood stays a perfectly representable −749.147 — this is why every MLE computation works with ℓ.',
       },
     ],
     derivedFrom: ['mle-likelihood', 'mle-loglik'],

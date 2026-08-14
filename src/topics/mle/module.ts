@@ -18,7 +18,7 @@
 //    The final snapshot is ALWAYS exactly the requested n (test cases pin the
 //    endpoint). lossMetricKey = 'nllPerSample' — the average negative
 //    log-likelihood at the MLE (= the cross-entropy of the fitted model on the
-//    sample), which descends toward the true entropy as n grows.
+//    sample), which converges upward toward the true entropy as n grows.
 //  - Math: exact closed forms — p̂ = k/n (Bernoulli); μ̂ = x̄ and
 //    σ̂² = Σ(x−μ̂)²/n (Gaussian, the BIASED ÷n MLE — the plan's required
 //    distinction; the unbiased ÷(n−1) estimator is computed alongside so the
@@ -31,8 +31,8 @@
 //  - LIKELIHOOD SURFACE (plan): the plan's "ℓ(μ, σ²) 2D contour + gradient
 //    arrows" needs loss-landscape (Wave 6) — NOT available. Self-contained
 //    substitution (documented drift): the gaussian family emits the ℓ(μ, σ²)
-//    grid as a matrix-animator command (9 μ-rows × 9 σ²-cols, numeric
-//    heatmap-style grid; the ℓ(μ, σ²) argmax over μ is exactly the center row
+//    grid as a matrix-animator command (9 μ-rows × 9 σ²-cols, numeric grid;
+//    the ℓ(μ, σ²) argmax over μ is exactly the center row
 //    μ̂ for every σ², asserted in the tests). The distribution-view renders
 //    Gaussian densities ONLY, so (a) the Bernoulli PMF cannot be drawn there —
 //    the coin family instead shows the raw flips plus p̂/pTrue reference lines
@@ -679,6 +679,8 @@ export const mleModule: TopicModule = {
         { value: 'linear', label: 'Linear regression + Gaussian noise' },
       ],
     },
+    // Schema min 10 is a UI convenience (sweep grid aligned to step 10);
+    // validateParams accepts n ≥ 2 so tests can drive small-n runs.
     { id: 'n', label: 'Sample count n', type: 'number', min: 10, max: 1000, step: 10, default: 100 },
     { id: 'seed', label: 'Seed', type: 'number', min: 0, max: 9999, step: 1, default: 42 },
     { id: 'pTrue', label: 'True p (coin)', type: 'number', min: 0.05, max: 0.95, step: 0.05, default: 0.7 },

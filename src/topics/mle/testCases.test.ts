@@ -77,6 +77,14 @@ describe('mle: plan case 1 — MLE recovers the true Bernoulli parameter (measur
     expect(bernoulliMle(stream.coin.slice(0, 100)).k).toBe(74);
   });
 
+  it('n=30 prefix of the seeded coin stream has k = 24, p̂ = 0.8 — the anchor for "nll@30 = nll@10" (mle-006)', () => {
+    const stream = generateStream(COIN);
+    const s30 = fitPrefix(COIN, stream, 30);
+    expect(s30.k).toBe(24);                                      // measured: 24 heads in the first 30 flips
+    expect(s30.pHat).toBeCloseTo(0.8, 12);                       // 24/30 = 0.8 — the same p̂ as n=10 (k=8)
+    expect(s30.nllPerSample).toBeCloseTo(0.5004024235381879, 6); // identical to nll@10 — same p̂ ⇒ same H(p̂)
+  });
+
   it('the score (numeric gradient of ℓ) vanishes at p̂: 1.14e−13 on the seeded stream', () => {
     const k = 707, n = 1000, pHat = 0.707;
     expect(bernoulliScore(k, n, pHat)).toBeCloseTo(0, 9);
@@ -89,7 +97,7 @@ describe('mle: plan case 1 — MLE recovers the true Bernoulli parameter (measur
     expect(bernoulliScore(k, n, pHat + 0.1)).toBeLessThan(0);
   });
 
-  it('nll per sample descends toward the true entropy H(0.7) = 0.6108643020548935', () => {
+  it('nll per sample converges upward toward the true entropy H(0.7) = 0.6108643020548935', () => {
     const run = computeRun(simulation, COIN, 500);
     const nll = run.snapshots.map((s) => s.metrics.nllPerSample);
     expect(run.snapshots).toHaveLength(5);            // [10, 30, 100, 300, 1000]
