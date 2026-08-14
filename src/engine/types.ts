@@ -260,3 +260,74 @@ export interface SnapshotRun {
   snapshots: SimState[];
   telemetry: RunTelemetry;
 }
+
+// ===== Wave-5 tree / clustering visual commands =====
+// Consumed by the 'tree-builder', 'cluster-animator' and 'dendrogram' registry
+// views. Units are documented per field — normalized vs world space matters:
+// each view consumes the same coordinate very differently.
+
+// A decision-tree node for the 'tree-builder' view. x/y are NORMALIZED
+// fractions of the drawing area (the topic computes the layout; the view
+// scales it to its container). Linkage is explicit: `children` lists child
+// node ids — topics emit NO separate edge command. Duplicate ids: last wins.
+export interface NodeCommand extends VisualCommand {
+  type: 'node';
+  x: number;                // normalized [0,1] of the drawing area width
+  y: number;                // normalized [0,1] of the drawing area height
+  label: string;            // feature-test or class label shown beside the node
+  splitInfo?: string;       // optional split summary under the label
+  children?: string[];      // child node ids (explicit linkage)
+  purity?: number;          // 0..1 — entropy/gini bar fill fraction (topic computes)
+  color?: string;
+  className?: string;
+}
+
+// A 2-D data point for the 'cluster-animator' view. x/y are WORLD units (px
+// independent — the view fits bounds like scatter-plot).
+export interface PointCommand extends VisualCommand {
+  type: 'point';
+  x: number;
+  y: number;
+  color?: string;
+}
+
+// A k-means centroid for the 'cluster-animator' view. x/y are WORLD units.
+// Topics MUST keep ids stable across snapshots: the view records each
+// centroid's position after every draw and renders a faint trail at the
+// PREVIOUS snapshot's positions (the "animated convergence" visual).
+export interface CentroidCommand extends VisualCommand {
+  type: 'centroid';
+  x: number;
+  y: number;
+  color?: string;
+}
+
+// Assignment of a point to a centroid for the 'cluster-animator' view. The
+// view draws a thin line from `point` to the centroid with matching
+// centroidId and colors the point with the centroid's color.
+export interface AssignmentCommand extends VisualCommand {
+  type: 'assignment';
+  point: [number, number];  // world units
+  centroidId: string;       // must match a CentroidCommand id
+  color?: string;
+}
+
+// A free-form text readout (used as the 'cluster-animator' loss-caption
+// fallback when the snapshot carries no loss/cost/j metric).
+export interface TextCommand extends VisualCommand {
+  type: 'text';
+  text: string;
+  color?: string;
+}
+
+// An agglomerative merge for the 'dendrogram' view. `height` is in distance
+// units (world space; the view auto-ranges its distance axis from the max
+// height). `children` reference leaf ids OR ids of previously-emitted merges
+// (topics emit merges in chronological order; the view lays them out
+// bottom-up). Unknown child ids render as dangling stubs; cyclic references
+// are guarded against hanging.
+export interface MergeCommand extends VisualCommand {
+  type: 'merge';
+  height: number;           // distance units, non-decreasing across the run
+  children: string[];       // leaf ids or earlier merge ids
+}

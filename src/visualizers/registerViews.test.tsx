@@ -59,6 +59,13 @@ describe('registerAllViews (wave 4 additions)', () => {
     expect(viewExists('distribution-view')).toBe(true);
   });
 
+  it('registers the tree-builder, cluster-animator and dendrogram ids', () => {
+    registerAllViews();
+    expect(viewExists('tree-builder')).toBe(true);
+    expect(viewExists('cluster-animator')).toBe(true);
+    expect(viewExists('dendrogram')).toBe(true);
+  });
+
   it('renders the eigenviewer empty state through the registry', () => {
     registerAllViews();
     const comp = getView('eigenviewer');
@@ -75,6 +82,33 @@ describe('registerAllViews (wave 4 additions)', () => {
     const View = comp as ComponentType<ViewProps>;
     render(<View params={{}} />);
     expect(screen.getByRole('status')).toHaveTextContent('distribution-view: no distributions');
+  });
+
+  it('renders the tree-builder empty state through the registry', () => {
+    registerAllViews();
+    const comp = getView('tree-builder');
+    expect(comp).toBeDefined();
+    const View = comp as ComponentType<ViewProps>;
+    render(<View params={{}} />);
+    expect(screen.getByRole('status')).toHaveTextContent('tree-builder: no nodes');
+  });
+
+  it('renders the cluster-animator empty state through the registry', () => {
+    registerAllViews();
+    const comp = getView('cluster-animator');
+    expect(comp).toBeDefined();
+    const View = comp as ComponentType<ViewProps>;
+    render(<View params={{}} />);
+    expect(screen.getByRole('status')).toHaveTextContent('cluster-animator: no data');
+  });
+
+  it('renders the dendrogram empty state through the registry', () => {
+    registerAllViews();
+    const comp = getView('dendrogram');
+    expect(comp).toBeDefined();
+    const View = comp as ComponentType<ViewProps>;
+    render(<View params={{}} />);
+    expect(screen.getByRole('status')).toHaveTextContent('dendrogram: no merges');
   });
 
   it('distribution-view resolves class densities from snapshot visuals', () => {

@@ -17,6 +17,9 @@ import { DecisionBoundary } from './DecisionBoundary';
 import { Eigenviewer } from './Eigenviewer';
 import { DistributionView } from './DistributionView';
 import { collectDistributions } from './distribution';
+import { TreeBuilder } from './TreeBuilder';
+import { ClusterAnimator } from './ClusterAnimator';
+import { Dendrogram } from './Dendrogram';
 
 export function registerAllViews(): void {
   registerView('scatter-plot', (p: ViewProps) => <ScatterPlot {...p} />);
@@ -45,5 +48,25 @@ export function registerAllViews(): void {
   // alongside their math); x/y ranges are fitted when the topic omits them.
   registerView('distribution-view', (p: ViewProps) => (
     <DistributionView distributions={collectDistributions(p.snapshot?.visuals ?? [])} />
+  ));
+  // tree-builder renders decision-tree nodes from {type:'node'} commands with
+  // NORMALIZED [0,1] x/y (the topic computes layout); children linkage is
+  // explicit via each node's children field, purity (0..1) drives the
+  // entropy/gini bar, and canvas highlights ring a node + its ancestor path.
+  registerView('tree-builder', (p: ViewProps) => (
+    <TreeBuilder snapshot={p.snapshot} params={p.params} />
+  ));
+  // cluster-animator renders the k-means step: points, centroids, assignment
+  // lines and a loss readout (metrics — topic.lossMetricKey preferred — with a
+  // {type:'text'} fallback); stable centroid ids across snapshots drive the
+  // faint convergence trail.
+  registerView('cluster-animator', (p: ViewProps) => (
+    <ClusterAnimator snapshot={p.snapshot} params={p.params} topic={p.topic} />
+  ));
+  // dendrogram renders agglomerative {type:'merge'} commands as an SVG
+  // hierarchy (leaves bottom-up, merges at their heights) with a distance
+  // axis; clicking a node selects it and highlights its subtree members.
+  registerView('dendrogram', (p: ViewProps) => (
+    <Dendrogram snapshot={p.snapshot} />
   ));
 }
