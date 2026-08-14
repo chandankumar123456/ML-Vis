@@ -256,9 +256,9 @@ export function eigen2x2Symmetric(M: number[][]): Eigen2x2Symmetric {
  */
 export function signFix(v: [number, number]): [number, number] {
   if (Math.abs(v[0]) >= Math.abs(v[1])) {
-    return v[0] < 0 ? [-v[0], -v[1]] : [v[0], v[1]];
+    return v[0] < 0 ? [-v[0], v[1] === 0 ? 0 : -v[1]] : [v[0], v[1]];
   }
-  return v[1] < 0 ? [-v[0], -v[1]] : [v[0], v[1]];
+  return v[1] < 0 ? [v[0] === 0 ? 0 : -v[0], -v[1]] : [v[0], v[1]];
 }
 
 /**
@@ -481,8 +481,9 @@ function dataBounds(points: SvdPoint[]): { x0: number; x1: number; y0: number; y
 }
 
 /**
- * Scatter-plot commands: the data cloud, the current v₁ axis through the data
- * mean, a direction arrow; the final snapshot adds both singular-vector axes.
+ * Scatter-plot commands: the data cloud plus the current v₁ axis through the
+ * data mean with a direction arrow (non-final snapshots). The final snapshot
+ * draws the red singular-vector axes and arrows instead of the gray overlay.
  */
 function buildScatter(sweep: SvdSweep, isFinal: boolean): VisualCommand[] {
   const { data, mu, core } = sweep;
@@ -490,12 +491,14 @@ function buildScatter(sweep: SvdSweep, isFinal: boolean): VisualCommand[] {
     type: 'point', id: `d${i}`, x: d.x, y: d.y, color: POINT_COLOR,
   }));
   const { x0, x1, y0, y1 } = dataBounds(data);
-  const line = clipRay(mu, core.V1, x0, x1, y0, y1);
-  if (line) cmd.push({ type: 'line', id: 'axis', points: line, color: AXIS_COLOR });
-  cmd.push({
-    type: 'arrow', id: 'dir', color: AXIS_COLOR,
-    x1: mu[0], y1: mu[1], x2: mu[0] + core.V1[0] * 1.1, y2: mu[1] + core.V1[1] * 1.1,
-  });
+  if (!isFinal) {
+    const line = clipRay(mu, core.V1, x0, x1, y0, y1);
+    if (line) cmd.push({ type: 'line', id: 'axis', points: line, color: AXIS_COLOR });
+    cmd.push({
+      type: 'arrow', id: 'dir', color: AXIS_COLOR,
+      x1: mu[0], y1: mu[1], x2: mu[0] + core.V1[0] * 1.1, y2: mu[1] + core.V1[1] * 1.1,
+    });
+  }
   if (isFinal) {
     const p1 = clipRay(mu, core.V1, x0, x1, y0, y1);
     const p2 = clipRay(mu, core.V2, x0, x1, y0, y1);
