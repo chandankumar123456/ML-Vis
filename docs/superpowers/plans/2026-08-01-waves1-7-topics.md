@@ -558,7 +558,9 @@ Failures: singular S_W (few samples per class); non-Gaussian multimodal classes;
 
 ---
 
-## Wave 4 — Dim-reduction cluster (3 topics)
+## Wave 4 — Dim-reduction cluster (3 topics) ✅ COMPLETE
+
+Components + all three topics shipped (`475cc14` + `49b9b65`, `fe00b63`, `0ec632f`, `a3d9c44`); review cycle closed (11 reviews — spec ×4, scrutiny ×4, closure re-reviews ×3; fixes `8ad7ba0`/`f4e6816`/`09fb6ed`); suite 581/581 (40 files), lint, build, e2e 3/3. Registry table updated (`49b9b65`) — actual consumers: pca/pca-svd → eigenviewer, mle → distribution-view (lda/naive-bayes substitute other views per their drift notes — registry-only rule). See per-task drift/SHIPPED notes below.
 
 ### Task 15: New registry component — eigenviewer (+ distribution-view)
 
@@ -568,6 +570,9 @@ Failures: singular S_W (few samples per class); non-Gaussian multimodal classes;
 - DistributionView: plots a distribution (PDF) per class with adjustable params — for NB (per-feature Gaussians), MLE (likelihood curve), LDA (class densities). Props: `{ distributions: {label, mean, variance, color}[], xRange, yRange }`.
 
 TDD both, then commit: `feat: eigenviewer and distribution-view components`
+
+> **Plan drift (Task 15):** (1) eigenviewer contract exact: `{snapshot?, params}`; VisualCommands `{type:'axis', id, angle: rad, color?}` — consumers emit `Math.atan2(u.y, u.x)` radians; the view converts rad→deg and normalizes into [0,180) (line-axis semantics θ ≡ θ+π); snapshot angles rounded to integer degrees (deviation ≤0.5°, acceptable for the step-1 slider). (2) distribution-view props `{distributions, xRange?, yRange?}` — optional ranges with auto-fit (documented superset); `color` optional with fallback palette; the registry wrapper forwards only `collectDistributions(...)` — no channel for explicit ranges yet (auto-fit covers mle; a `{type:'range'}` command is deferred). (3) lda/naive-bayes substitute other views per earlier drift notes (registry-only rule). (4) platform note: CanvasStage zoom/pan is transform-only — `requestRepaint` has no subscriber anywhere (ScatterPlot/LossCurve identical); pan/zoom is inert platform-wide, deferred.
+> SHIPPED: `475cc14` (feat, 11 files, +1543: engine/types.ts +31 additive, Eigenviewer 226, DistributionView 171, eigenview.ts 153, distribution.ts 119, tests, registerViews.tsx +14) + `49b9b65` (docs registry table) → reviews: spec APPROVED-WITH-NITS (F1 negative-angle normalization, F2 NaN-bounds guard, F5 container height, F6 legend keys, F7 comment, F11 test gaps) → fixes `09fb6ed` (round 1) → closure round 1: CLOSED, 117/117 → scrutiny PASS-WITH-NITS (M1 projection-count truncation — fixed; M2 container default alignment — fixed; M3 fitYRange peak loop KEPT with comment — scrutiny's redundancy claim disproven (off-grid mean 0.37: exact peak 1.784124 vs nearest grid sample 1.783848; multi-class worst case grid undershoots the peak by 92.5%); M4 RAD2DEG dead-code claim DISPROVEN — used at eigenview.ts:126, module-private; N1 VarianceBar angle docs) → closure round 2: CLOSED, 118/118.
 
 ### Task 16: pca
 
@@ -594,6 +599,9 @@ Comparisons: vs LDA (labels vs no labels — frequently-confused), vs feature se
 
 Failures: high noise (PCs unstable); outliers (variance dominated); scaling (features with different units dominate).
 
+> **Plan drift (Task 16):** (1) EXACT 2×2 closed-form eigen-decomposition (PSD trace/det formula), no iterative method — run = 36×5° Rayleigh-quotient grid sweep + 1 final closed-form snapshot (lossMetricKey 'axisVariance' higher-better, layer title "Principal Component Analysis"; final PC1 76.40663404901252° strictly beats every grid angle). (2) covariance convention (1/n)XᵀX centered; reconErrK1 = λ₂ asserted to 1e-12; the centering contrast (rotDeg 80: centered PC1 127.15° vs raw 33.30°) is delivered as a failure demo. (3) params n 3-80, corr −0.95..0.95, rotDeg 0-170, noise 0-1.5, seed + test-only `points` JSON. Measured anchors (seed 42): Σ=[[0.37011827663219543,0.37911198787583555],[0.37911198787583555,1.8463033092217696]], λ₁=1.9379736879527472, λ₂=0.2784478979012177.
+> SHIPPED: `fe00b63` (feat, 9 files, 31 tests) → reviews: spec APPROVED-WITH-NITS (31/31; independent Jacobi + power-iteration cross-checks); scrutiny PASS-WITH-NITS (every anchor recomputed exact; 1 cosmetic nit — unused ANGLE_STEP_DEG export, same convention as lda sibling — no action). No fix cycle needed.
+
 ### Task 17: pca-svd
 
 **Files:** `src/topics/pca-svd/{...}.ts`
@@ -615,6 +623,9 @@ Mistakes: confusing left/right singular vectors; forgetting Σ is diagonal sorte
 Comparisons: vs eigen-decomposition (symmetric vs general), vs PCA (same math), vs normal equation (pseudo-inverse stability).
 
 Failures: NaN for missing data (SVD needs complete matrices — note alternatives); numerical sign flips.
+
+> **Plan drift (Task 17):** (1) EXACT 2×2 closed-form SVD (Gram matrix → eigen → normalized columns); deterministic sign convention (largest-|component| positive; flip case rotDeg 140/seed 2); collinear σ₂=0 → rank-deficient null-space completion (honest failure narration). (2) run = 4 build-up snapshots + rank sweep (2 steps at rank 2); lossMetricKey 'reconstructionError' lower-better = σ_{k+1}²/n; Eckart-Young ‖X−UΣVᵀ‖=σ₂ asserted; ‖X−UΣVᵀ‖∞=4.44e-16; data synthesis byte-identical to pca (same mulberry32/Box-Muller/DATA_OFFSET). (3) final snapshot draws red singular-vector axes with no gray overlay (non-final draws the gray direction line). Measured anchors (seed 42): σ₁=8.804484511776364, σ₂=3.3373516320652685, λ(XᵀX)=77.51894751810988/11.137915916048712.
+> SHIPPED: `0ec632f` (feat, 9 files, 40 tests) → reviews: spec APPROVED-WITH-NITS (40/40; independent recomputation of every anchor); scrutiny PASS-WITH-NITS (2 MINORs: duplicate final-snapshot axis overlay, −0 components in signFix) → fixes `8ad7ba0` → closure: CLOSED, 40/40.
 
 ### Task 18: mle (Maximum Likelihood Estimation — REQUIRED topic; spec §5 topic #12)
 
@@ -640,6 +651,9 @@ Comparisons: vs MAP (prior term), vs CE (same math different lens), vs OLS (MLE 
 Failures: underflow with many samples (use log), non-identifiable parameters (flat likelihood), non-convex likelihood (local maxima).
 
 Commit: `feat: mle topic module with likelihood surface simulation`
+
+> **Plan drift (Task 18):** (1) dataset family select (coin/gaussian/linear) + n 10-1000 + seed; growing-n sweep [10,30,100,300,1000] as strict PREFIXES of ONE mulberry32 stream (no re-seeding — honest consistency; off-grid n=55 → [10,30,55]); final snapshot at exactly n. (2) MLEs closed-form: p̂=k/n, μ̂=x̄, σ̂² ÷n (BIASED — n=10 ratio σ̂²ᵤ/σ̂² exactly 10/9, n=1000 exactly 1000/999), θ̂ = normal equation exact; lossMetricKey 'nllPerSample' (CE link, lower-better; layer title "Average Negative Log-Likelihood at the MLE"); the nll ASCENDS toward the true entropy H(0.7)=0.610864 from below (Gibbs' inequality H(p̂)≤H(p) — review caught the original "descends" wording). (3) likelihood surface = self-contained 9×9 ℓ(μ,σ²) numeric grid via matrix-animator (loss-landscape is Wave 6 — documented substitution; "heatmap" wording corrected to "numeric grid"); coin family uses scatter + p̂/pTrue lines (Bernoulli PMF not drawable in distribution-view — documented drift). (4) failures: non-identifiable flat ℓ=−6.9444548034561 (telemetry failure "singular/identifiable"), non-convex mixture ℓ(±2)=−8.412030710835896 vs ℓ(0)=−13.675754132818689 (labeled conceptual demo — mixture is not one of the three families). Measured anchors (seed 42): k=8/74/219/707, p̂=0.8/0.74/0.73/0.707; ℓ(0.9)=−749.1473168173385 (NOT −604.8 — that value is ℓ(p̂)=−604.8160237512594; review blocker, fixed); θ̂=(−0.4672611084691402, 1.590870319456517).
+> SHIPPED: `a3d9c44` (feat, 9 files, 25 tests) → reviews: spec CHANGES-REQUIRED (1 blocker — wrong ℓ(0.9)=−604.8 in 8 places across 4 content files, measured −749.147; 4 nits) → fixes `f4e6816` (round 1) → closure round 1: CLOSED, 25/25 → scrutiny CHANGES-REQUIRED (2 MAJORs — "descends"→"ascends" wording in 8 locations, mle-006 explanation described the n=1000 sweep for an n=100 question; 1 NIT — k@30=24 anchor) → fixes `f4e6816` (round 2) → closure round 2: CLOSED, 26/26.
 
 ---
 
