@@ -51,13 +51,13 @@ src/topics/<topic-id>/
 | Component | When | Used by |
 |---|---|---|
 | `decision-boundary` | Wave 2 ✅ SHIPPED (`733376e`, hardened `e138f2b`) | logistic-regression, softmax-regression, svm-*, perceptron, knn, naive-bayes |
-| `eigenviewer` | Wave 4 | pca, pca-svd, lda |
+| `eigenviewer` | Wave 4 ✅ SHIPPED (`475cc14`) | pca, pca-svd, lda |
 | `tree-builder` | Wave 5 | decision-trees, decision-trees-regression |
 | `cluster-animator` | Wave 5 | kmeans, hierarchical-clustering |
 | `dendrogram` | Wave 5 | hierarchical-clustering |
 | `nn-inspector` | Wave 6 | neural-networks, backpropagation |
 | `activation-view` | Wave 6 | neural-networks, backpropagation, logistic-regression |
-| `distribution-view` | Wave 4 | naive-bayes, mle, lda |
+| `distribution-view` | Wave 4 ✅ SHIPPED (`475cc14`) | naive-bayes, mle, lda |
 | `confusion-explorer` | Wave 7 | classification-metrics, roc-auc |
 | `roc-viewer` | Wave 7 | roc-auc |
 | `curve-comparator` | Wave 7 | bias-variance, overfitting-underfitting, cross-validation |
