@@ -164,6 +164,20 @@ describe('pointsBounds', () => {
   it('returns null for an empty point list (callers fall back to a default)', () => {
     expect(pointsBounds([])).toBeNull();
   });
+
+  it('skips non-finite points when fitting bounds (ScatterPlot convention)', () => {
+    const b = pointsBounds([[0, 0], [Number.NaN, 0], [4, 0]]);
+    expect(b).not.toBeNull();
+    // the NaN-coordinate point is ignored → bounds come from (0,0) and (4,0)
+    expect(b!.x[0]).toBeCloseTo(-0.9, 10);
+    expect(b!.x[1]).toBeCloseTo(4.9, 10);
+    expect(b!.y[0]).toBeCloseTo(-0.5, 10);
+    expect(b!.y[1]).toBeCloseTo(0.5, 10);
+  });
+
+  it('returns null when every point is non-finite (callers fall back to a default)', () => {
+    expect(pointsBounds([[Number.NaN, 0], [0, Number.NEGATIVE_INFINITY]])).toBeNull();
+  });
 });
 
 describe('axisExtent', () => {
@@ -196,6 +210,13 @@ describe('resolveAngleDeg', () => {
   it('ignores a non-finite axis command angle', () => {
     expect(resolveAngleDeg([{ type: 'axis', angle: Number.NaN }], {}, null)).toBe(0);
     expect(resolveAngleDeg([axisCmd(Number.POSITIVE_INFINITY)], { angleDeg: 12 }, null)).toBe(12);
+  });
+
+  it('normalizes a negative axis angle (radians) into [0, 180)', () => {
+    // -0.5 rad ≈ -28.65° — a line axis is θ ≡ θ + 180°, so -28.65° ≡ 151.35°
+    expect(resolveAngleDeg([axisCmd(-0.5)], {}, null)).toBe(151);
+    // -π/2 rad = -90° ≡ 90°
+    expect(resolveAngleDeg([axisCmd(-Math.PI / 2)], {}, null)).toBe(90);
   });
 
   it('defaults to 0 when nothing provides an angle', () => {
@@ -236,6 +257,21 @@ describe('sceneProjections', () => {
     expect(pr[0].color).toBe('#ff0000');
     expect(pr[1].to).toEqual([3, 1]);
     expect(pr[1].residual).toBe(1.25);
+  });
+
+  it('truncates snapshot projections to the point count (colors stay indexed)', () => {
+    // 2 points but 3 projection commands: the view colors by the POINTS array,
+    // so the scene must emit at most points.length projections — anything more
+    // would index an undefined color when Eigenviewer paints scene.colors[i].
+    const pr = sceneProjections(pts, c, [
+      { type: 'projection', point: [0, 0], onto: [1, 1], residual: 2.5, color: '#ff0000' },
+      { type: 'projection', point: [4, 0], onto: [3, 1], residual: 1.25 },
+      { type: 'projection', point: [9, 9], onto: [8, 8], residual: 0.5 },
+    ], 0, null);
+    expect(pr).toHaveLength(2);
+    expect(pr[0].to).toEqual([1, 1]);
+    expect(pr[1].to).toEqual([3, 1]);
+    expect(pr[0].color).toBe('#ff0000');
   });
 
   it('computes the residual as the perpendicular distance to the axis', () => {

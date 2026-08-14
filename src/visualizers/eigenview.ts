@@ -65,6 +65,11 @@ export function varianceAlong(points: [number, number][], c: [number, number], u
   return Math.max(0, sum2 / n - (sum / n) ** 2);
 }
 
+/**
+ * One bar of the explained-variance split. `angle` is in RADIANS and
+ * UNNORMALIZED, with line-axis semantics (θ ≡ θ + π): consumers must
+ * normalize (e.g. wrap into [0, 180) degrees) before displaying it.
+ */
 export interface VarianceBar { angle: number; fraction: number }
 
 /**
@@ -87,15 +92,18 @@ export function varianceFractions(points: [number, number][], c: [number, number
 
 /**
  * World-space domain over the point cloud with the ScatterPlot padding
- * convention (10% + 0.5 per axis); null when no points exist.
+ * convention (10% + 0.5 per axis); null when no points exist or every point
+ * carries a non-finite coordinate (callers fall back to their default domain).
  */
 export function pointsBounds(points: [number, number][]): Bounds | null {
   if (points.length === 0) return null;
   let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
   for (const [x, y] of points) {
+    if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
     x0 = Math.min(x0, x); x1 = Math.max(x1, x);
     y0 = Math.min(y0, y); y1 = Math.max(y1, y);
   }
+  if (!Number.isFinite(x0)) return null;
   const padX = (x1 - x0) * 0.1 + 0.5, padY = (y1 - y0) * 0.1 + 0.5;
   return { x: [x0 - padX, x1 + padX], y: [y0 - padY, y1 + padY] };
 }
@@ -111,7 +119,13 @@ export function resolveAngleDeg(
   if (overrideDeg !== null && Number.isFinite(overrideDeg)) return Math.round(overrideDeg);
   const axis = visuals.find((v) => v.type === 'axis');
   const rad = axis?.angle;
-  if (typeof rad === 'number' && Number.isFinite(rad)) return Math.round(rad * RAD2DEG);
+  if (typeof rad === 'number' && Number.isFinite(rad)) {
+    // The axis is a line (θ ≡ θ + 180°): wrap radians into [0, 180) BEFORE
+    // rounding so a negative angle (e.g. -0.5 rad) can never render as a
+    // negative degree that contradicts the 0..180 slider range.
+    const deg = ((rad * RAD2DEG) % 180 + 180) % 180;
+    return Math.round(deg);
+  }
   const hint = params.angleDeg;
   if (typeof hint === 'number' && Number.isFinite(hint)) return Math.round(hint);
   return 0;
@@ -137,7 +151,11 @@ export function sceneProjections(
 ): SceneProjection[] {
   const useCommands = overrideDeg === null && projCmds.length > 0;
   if (useCommands) {
-    return projCmds.map((cmd) => ({
+    // A topic may emit more projection commands than there are points (e.g. a
+    // per-class guide). The view colors by the POINTS array index, so truncate
+    // to the point count — extra projections would index an undefined color.
+    const n = Math.min(projCmds.length, points.length);
+    return projCmds.slice(0, n).map((cmd) => ({
       from: cmd.point as [number, number],
       to: cmd.onto as [number, number],
       residual: typeof cmd.residual === 'number' ? cmd.residual : 0,

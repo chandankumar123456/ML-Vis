@@ -56,6 +56,9 @@ export function fitYRange(distributions: Distribution[], xRange?: [number, numbe
   const rx = xRange ?? fitXRange(distributions);
   let max = 0;
   const visible = (d: Distribution) => d.mean >= rx[0] && d.mean <= rx[1];
+  // Exact peak at a visible mean: the CURVE_SAMPLES grid below samples evenly
+  // spaced x, and d.mean can fall BETWEEN grid points, so the grid alone would
+  // clip the true peak (and the mean marker drawn up to it).
   for (const d of distributions) {
     if (!(d.variance > 0) || !Number.isFinite(d.mean)) continue;
     if (visible(d)) max = Math.max(max, gaussianPdf(d.mean, d.mean, d.variance));

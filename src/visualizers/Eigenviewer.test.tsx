@@ -170,6 +170,36 @@ describe('Eigenviewer', () => {
     expect(container.querySelector('[data-testid="eigen-follow-button"]')).toBeNull();
   });
 
+  it('repaints from a second snapshot and keeps local mode state across the scrub', () => {
+    const snap0 = mkSnapshot([
+      { type: 'point', x: 0, y: 0 },
+      { type: 'point', x: 4, y: 0 },
+      { type: 'axis', id: 'axis', angle: 0, color: '#64748b' },
+    ]);
+    const snap45 = mkSnapshot([
+      { type: 'point', x: 0, y: 0 },
+      { type: 'point', x: 4, y: 0 },
+      { type: 'axis', id: 'axis', angle: Math.PI / 4, color: '#64748b' },
+    ]);
+    const { container, rerender } = render(<Eigenviewer params={{}} snapshot={snap0} />);
+    const root = () => container.querySelector('[data-testid="eigenview"]')!;
+    expect(root().getAttribute('data-angle-deg')).toBe('0');
+
+    // scrubbing to a second snapshot repaints the scene from the new axis angle
+    rerender(<Eigenviewer params={{}} snapshot={snap45} />);
+    expect(root().getAttribute('data-angle-deg')).toBe('45');
+    // the variance bars repaint too: 45° splits the variance evenly
+    const bars = container.querySelectorAll('[data-testid="eigen-bar"]');
+    expect(bars[0].getAttribute('data-angle')).toBe('45');
+    expect(bars[0].getAttribute('data-fraction')).toBe('0.5000');
+
+    // local mode is not reset by the scrub: reconstruct persists across snapshots
+    fireEvent.click(container.querySelector('[data-testid="eigen-mode-reconstruct"]')!);
+    rerender(<Eigenviewer params={{}} snapshot={snap0} />);
+    expect(root().getAttribute('data-mode')).toBe('reconstruct');
+    expect(root().getAttribute('data-angle-deg')).toBe('0');
+  });
+
   it('consumes snapshot projection commands (no override) instead of recomputing', () => {
     // Points [(0,2),(2,0)] → centroid (1,1); axis angle 0 → u = (1,0).
     // The topic emits projections to odd onto targets; the strip must reflect

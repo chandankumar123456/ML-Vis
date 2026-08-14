@@ -120,4 +120,27 @@ describe('DistributionView', () => {
     // only the valid distribution is listed in the legend
     expect(container.querySelectorAll('[data-testid="distribution-legend-item"]').length).toBe(1);
   });
+
+  it('renders both legend items when classes share a label (keys never collide)', () => {
+    const { container } = render(<DistributionView distributions={[
+      { label: 'class', mean: 0, variance: 1, color: '#2563eb' },
+      { label: 'class', mean: 3, variance: 4, color: '#dc2626' },
+    ]} />);
+    const items = container.querySelectorAll('[data-testid="distribution-legend-item"]');
+    expect(items.length).toBe(2);
+    // both entries keep their own label and summary
+    expect(items[0].getAttribute('data-label')).toBe('class');
+    expect(items[1].getAttribute('data-label')).toBe('class');
+    expect(screen.getAllByText('class')).toHaveLength(2);
+  });
+
+  it('cycles the fallback palette for classes without an explicit color', () => {
+    render(<DistributionView distributions={[
+      { label: 'a', mean: 0, variance: 1 },
+      { label: 'b', mean: 3, variance: 4 },
+    ]} />);
+    // FALLBACK_COLORS[0] and FALLBACK_COLORS[1] are used for the curves
+    expect(ctx.strokeStyles).toContain('#2563eb');
+    expect(ctx.strokeStyles).toContain('#dc2626');
+  });
 });

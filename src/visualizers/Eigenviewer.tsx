@@ -5,9 +5,11 @@
 // guides, projected dots on the axis, a 1-D projection strip, and
 // variance-explained bars for the axis and its orthogonal complement (the two
 // "PCs" of the current rotation). Reconstruction mode projects back to 2-D and
-// draws residual error lines to the originals. The slider is a LOCAL override:
-// while untouched the view is driven by the snapshot's axis command (or the
-// params.angleDeg topic hint); dragging it recomputes everything live.
+// draws residual error lines to the originals. The axis slider and the
+// project/reconstruct toggle are LOCAL state: while the slider is untouched the
+// view is driven by the snapshot's axis command (or the params.angleDeg topic
+// hint); dragging it recomputes everything live; the display-mode toggle
+// persists across snapshot scrubs.
 // Zoom/pan reuse CanvasStage (ScatterPlot convention); pure math lives in
 // ./eigenview with its own unit tests.
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -39,10 +41,15 @@ export function Eigenviewer({ snapshot, params }: {
   // The whole scene (points, colors, effective angle, projections, bars) is a
   // pure memo of (snapshot, params, overrideDeg) — slider drags and snapshot
   // scrubs both invalidate exactly what they must. Deterministic: computed via
-  // ./eigenview helpers only.
+  // ./eigenview helpers only. `mode` is separate local state that only selects
+  // how the shared scene is painted, so it survives snapshot scrubs.
   const scene = useMemo(() => {
     const visuals = snapshot?.visuals ?? [];
-    const pointCmds = visuals.filter((v) => v.type === 'point');
+    // Drop non-finite points up front: a NaN/∞ coordinate would poison the
+    // centroid, bounds and projections downstream (pointsBounds skips them
+    // too, but keeping them out of the scene keeps the bars/strip finite).
+    const pointCmds = visuals.filter((v) =>
+      v.type === 'point' && Number.isFinite(v.x as number) && Number.isFinite(v.y as number));
     const axisCmd = visuals.find((v) => v.type === 'axis');
     const projCmds = visuals.filter((v) => v.type === 'projection');
     const points = pointCmds.map((v) => [v.x as number, v.y as number] as [number, number]);

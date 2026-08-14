@@ -27,7 +27,9 @@ export function DistributionView({ distributions, xRange, yRange }: {
   xRange?: [number, number];
   yRange?: [number, number];
 }) {
-  const [ref, size] = useContainerSize(600, 320);
+  // 360 matches the outer div's fixed height below — the default is only a
+  // pre-ResizeObserver placeholder, and the observed size always reports 360.
+  const [ref, size] = useContainerSize(600, 360);
   const hostRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<{ host: HTMLDivElement; canvas: HTMLCanvasElement } | null>(null);
 
@@ -78,11 +80,11 @@ export function DistributionView({ distributions, xRange, yRange }: {
   return (
     <div ref={ref} className="distribution-view" data-distribution-count={dists.length}
       style={{ width: '100%', height: 360, position: 'relative' }}>
-      <div ref={hostRef} style={{ width: '100%', height: 320 }} />
+      <div ref={hostRef} style={{ width: '100%', height: '100%' }} />
       <div className="distribution-legend distribution-legend-overlay"
         style={{ position: 'absolute', top: 4, right: 8, display: 'flex', gap: 12, flexWrap: 'wrap' }}>
         {dists.map((d, i) => (
-          <span key={d.label} className="distribution-legend-item"
+          <span key={`${d.label}-${i}`} className="distribution-legend-item"
             data-testid="distribution-legend-item" data-label={d.label}>
             <span className="distribution-swatch"
               style={{ background: d.color ?? FALLBACK_COLORS[i % FALLBACK_COLORS.length] }} />
